@@ -20,12 +20,13 @@ export function useAudioPlayer(
   const setVolumeLevel = useChatStore((state) => state.setVolumeLevel);
   
   const audioContextRef = useRef<AudioContext | null>(null);
-  const audioQueueRef = useRef<AudioBuffer[]>([]);
   const isPlayingRef = useRef(false);
-  const currentSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const nextStartTimeRef = useRef(0);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const scheduledSourcesRef = useRef<AudioBufferSourceNode[]>([]);
+  const lastScheduledEndTimeRef = useRef(0);
+  const playbackCheckIntervalRef = useRef<number | null>(null);
 
   // Initialize audio context
   const getAudioContext = useCallback(() => {
@@ -39,6 +40,11 @@ export function useAudioPlayer(
       analyser.fftSize = 256;
       analyser.connect(audioContextRef.current.destination);
       analyserRef.current = analyser;
+      
+      // Reset scheduling state
+      nextStartTimeRef.current = 0;
+      lastScheduledEndTimeRef.current = 0;
+      scheduledSourcesRef.current = [];
     }
     
     // Resume if suspended
@@ -90,83 +96,109 @@ export function useAudioPlayer(
     setVolumeLevel(0);
   }, [setVolumeLevel]);
 
-  // Play next audio in queue
-  const playNextInQueue = useCallback(() => {
+  // Check if playback has ended
+  const checkPlaybackEnded = useCallback(() => {
+    const audioContext = audioContextRef.current;
+    if (!audioContext) return;
+    
+    // If current time has passed the last scheduled end time, playback is done
+    if (isPlayingRef.current && audioContext.currentTime >= lastScheduledEndTimeRef.current) {
+      // Clean up finished sources
+      scheduledSourcesRef.current = [];
+      isPlayingRef.current = false;
+      setIsPlaying(false);
+      stopVolumeMonitoring();
+      onPlaybackEnd?.();
+      
+      // Clear the check interval
+      if (playbackCheckIntervalRef.current) {
+        clearInterval(playbackCheckIntervalRef.current);
+        playbackCheckIntervalRef.current = null;
+      }
+    }
+  }, [setIsPlaying, stopVolumeMonitoring, onPlaybackEnd]);
+
+  // Schedule audio buffer for playback (pre-scheduling approach)
+  const scheduleBuffer = useCallback((buffer: AudioBuffer) => {
     const audioContext = audioContextRef.current;
     const analyser = analyserRef.current;
     
-    if (!audioContext || !analyser || audioQueueRef.current.length === 0) {
-      if (isPlayingRef.current) {
-        isPlayingRef.current = false;
-        setIsPlaying(false);
-        stopVolumeMonitoring();
-        onPlaybackEnd?.();
-      }
-      return;
-    }
+    if (!audioContext || !analyser) return;
 
-    const buffer = audioQueueRef.current.shift()!;
     const source = audioContext.createBufferSource();
     source.buffer = buffer;
-    
-    // Connect through analyser
     source.connect(analyser);
     
-    currentSourceRef.current = source;
-
-    // Calculate start time for gapless playback
+    // Calculate start time - use last scheduled end time or current time
     const now = audioContext.currentTime;
-    const startTime = Math.max(nextStartTimeRef.current, now);
-    nextStartTimeRef.current = startTime + buffer.duration;
+    const startTime = Math.max(lastScheduledEndTimeRef.current, now);
+    
+    // Update the last scheduled end time
+    lastScheduledEndTimeRef.current = startTime + buffer.duration;
 
-    source.onended = () => {
-      currentSourceRef.current = null;
-      playNextInQueue();
-    };
-
+    // Schedule the buffer to start at the calculated time
     source.start(startTime);
+    
+    // Keep track of scheduled sources for cleanup
+    scheduledSourcesRef.current.push(source);
+    
+    // Clean up old sources that have finished playing
+    source.onended = () => {
+      const index = scheduledSourcesRef.current.indexOf(source);
+      if (index > -1) {
+        scheduledSourcesRef.current.splice(index, 1);
+      }
+    };
+  }, []);
 
-    if (!isPlayingRef.current) {
-      isPlayingRef.current = true;
-      setIsPlaying(true);
-      startVolumeMonitoring();
-      onPlaybackStart?.();
-    }
-  }, [setIsPlaying, onPlaybackStart, onPlaybackEnd, startVolumeMonitoring, stopVolumeMonitoring]);
-
-  // Add audio chunk to queue
+  // Add audio chunk - immediately schedule for playback
   const addAudioChunk = useCallback((base64Data: string, sampleRate: number = AUDIO_CONFIG.sampleRate) => {
     const audioContext = getAudioContext();
     
     try {
       const int16Data = base64ToInt16(base64Data);
       const audioBuffer = createAudioBuffer(audioContext, int16Data, sampleRate);
-      audioQueueRef.current.push(audioBuffer);
+      
+      // Immediately schedule this buffer for playback
+      scheduleBuffer(audioBuffer);
 
-      // Start playing if not already
-      if (!isPlayingRef.current && audioQueueRef.current.length > 0) {
-        nextStartTimeRef.current = audioContext.currentTime;
-        playNextInQueue();
+      // Start playback state tracking if not already
+      if (!isPlayingRef.current) {
+        isPlayingRef.current = true;
+        setIsPlaying(true);
+        startVolumeMonitoring();
+        onPlaybackStart?.();
+        
+        // Start periodic check for playback completion
+        if (!playbackCheckIntervalRef.current) {
+          playbackCheckIntervalRef.current = window.setInterval(checkPlaybackEnded, 100);
+        }
       }
     } catch (error) {
       console.error('Failed to decode audio chunk:', error);
     }
-  }, [getAudioContext, playNextInQueue]);
+  }, [getAudioContext, scheduleBuffer, setIsPlaying, startVolumeMonitoring, onPlaybackStart, checkPlaybackEnded]);
 
   // Stop playback
   const stopPlayback = useCallback(() => {
-    // Clear queue
-    audioQueueRef.current = [];
-
-    // Stop current source
-    if (currentSourceRef.current) {
+    // Stop all scheduled sources
+    for (const source of scheduledSourcesRef.current) {
       try {
-        currentSourceRef.current.stop();
+        source.stop();
       } catch {
         // Ignore errors if already stopped
       }
-      currentSourceRef.current = null;
     }
+    scheduledSourcesRef.current = [];
+    
+    // Clear playback check interval
+    if (playbackCheckIntervalRef.current) {
+      clearInterval(playbackCheckIntervalRef.current);
+      playbackCheckIntervalRef.current = null;
+    }
+    
+    // Reset scheduling state
+    lastScheduledEndTimeRef.current = 0;
 
     isPlayingRef.current = false;
     setIsPlaying(false);
@@ -207,6 +239,10 @@ export function useAudioPlayer(
   useEffect(() => {
     return () => {
       stopPlayback();
+      if (playbackCheckIntervalRef.current) {
+        clearInterval(playbackCheckIntervalRef.current);
+        playbackCheckIntervalRef.current = null;
+      }
       if (audioContextRef.current) {
         audioContextRef.current.close();
         audioContextRef.current = null;
