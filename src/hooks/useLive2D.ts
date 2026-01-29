@@ -53,6 +53,9 @@ export function useLive2D(modelPath: string) {
     containerRef.current = container;
 
     try {
+      // Yield to browser to allow loading animation to render
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      
       // Create PIXI application (PIXI v7 API - options in constructor)
       const app = new PIXI.Application({
         view: document.createElement('canvas'),
@@ -65,6 +68,9 @@ export function useLive2D(modelPath: string) {
 
       container.appendChild(app.view as HTMLCanvasElement);
       appRef.current = app;
+
+      // Yield again before loading the model
+      await new Promise(resolve => requestAnimationFrame(resolve));
 
       // Load Live2D model
       const model = await Live2DModel.from(modelPath, {

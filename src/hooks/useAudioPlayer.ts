@@ -14,7 +14,10 @@ export function useAudioPlayer(
 ) {
   const { onPlaybackStart, onPlaybackEnd, onVolumeChange } = options;
   
-  const { ws, setIsPlaying, setVolumeLevel } = useChatStore();
+  // Use selectors to avoid subscribing to entire store
+  const ws = useChatStore((state) => state.ws);
+  const setIsPlaying = useChatStore((state) => state.setIsPlaying);
+  const setVolumeLevel = useChatStore((state) => state.setVolumeLevel);
   
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioQueueRef = useRef<AudioBuffer[]>([]);

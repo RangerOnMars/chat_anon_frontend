@@ -47,7 +47,10 @@ const stageConfig: Record<
 const stages: PipelineStage[] = ['asr', 'llm', 'tts', 'playing'];
 
 export function StatusIndicator() {
-  const { pipelineStage, isThinking, partialTranscription } = useChatStore();
+  // Use selectors to avoid subscribing to entire store
+  const pipelineStage = useChatStore((state) => state.pipelineStage);
+  const isThinking = useChatStore((state) => state.isThinking);
+  const partialTranscription = useChatStore((state) => state.partialTranscription);
 
   const currentStageIndex = stages.indexOf(pipelineStage);
   const isProcessing = pipelineStage !== 'idle' || isThinking;

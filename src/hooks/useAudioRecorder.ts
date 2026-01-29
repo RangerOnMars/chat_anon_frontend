@@ -18,7 +18,9 @@ export interface AudioRecorderOptions {
 export function useAudioRecorder(options: AudioRecorderOptions = {}) {
   const { onChunk, onVolumeChange, chunkIntervalMs = 100 } = options;
   
-  const { setIsRecording, setVolumeLevel } = useChatStore();
+  // Use selectors to avoid subscribing to entire store
+  const setIsRecording = useChatStore((state) => state.setIsRecording);
+  const setVolumeLevel = useChatStore((state) => state.setVolumeLevel);
   
   const [isSupported, setIsSupported] = useState(true);
   const [permissionDenied, setPermissionDenied] = useState(false);

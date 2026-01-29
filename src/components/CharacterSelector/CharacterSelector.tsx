@@ -6,7 +6,10 @@ import { ChevronDown, Check, Loader2 } from 'lucide-react';
 
 export function CharacterSelector() {
   const [isOpen, setIsOpen] = useState(false);
-  const { currentCharacter, characters, connectionStatus } = useChatStore();
+  // Use selectors to avoid subscribing to entire store
+  const currentCharacter = useChatStore((state) => state.currentCharacter);
+  const characters = useChatStore((state) => state.characters);
+  const connectionStatus = useChatStore((state) => state.connectionStatus);
   const { switchCharacter, fetchCharacters } = useWebSocket();
 
   // Fetch characters on mount

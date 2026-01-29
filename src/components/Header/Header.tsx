@@ -18,14 +18,13 @@ export function Header() {
   const [showSettings, setShowSettings] = useState(false);
   const [tokenInput, setTokenInput] = useState('');
 
-  const {
-    connectionStatus,
-    currentCharacter,
-    apiToken,
-    isDarkMode,
-    setApiToken,
-    toggleDarkMode,
-  } = useChatStore();
+  // Use selectors to avoid subscribing to entire store
+  const connectionStatus = useChatStore((state) => state.connectionStatus);
+  const currentCharacter = useChatStore((state) => state.currentCharacter);
+  const apiToken = useChatStore((state) => state.apiToken);
+  const isDarkMode = useChatStore((state) => state.isDarkMode);
+  const setApiToken = useChatStore((state) => state.setApiToken);
+  const toggleDarkMode = useChatStore((state) => state.toggleDarkMode);
 
   const { connect, disconnect, clearHistory } = useWebSocket();
 

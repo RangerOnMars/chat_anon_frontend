@@ -10,7 +10,9 @@ const MODEL_PATH = '/live2d/live2D_model/3.model.json';
 export function Live2DCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const { initialize, isLoaded, loadError, controller } = useLive2D(MODEL_PATH);
-  const { messages, isPlaying } = useChatStore();
+  // Use selectors to avoid subscribing to entire store
+  const messages = useChatStore((state) => state.messages);
+  const isPlaying = useChatStore((state) => state.isPlaying);
   const lastEmotionRef = useRef<string>('idle');
 
   // Initialize on mount

@@ -14,14 +14,13 @@ import {
 } from 'lucide-react';
 
 export function VoiceControls() {
-  const {
-    connectionStatus,
-    voiceMode,
-    isRecording,
-    isThinking,
-    volumeLevel,
-    setVoiceMode,
-  } = useChatStore();
+  // Use selectors to avoid subscribing to entire store
+  const connectionStatus = useChatStore((state) => state.connectionStatus);
+  const voiceMode = useChatStore((state) => state.voiceMode);
+  const isRecording = useChatStore((state) => state.isRecording);
+  const isThinking = useChatStore((state) => state.isThinking);
+  const volumeLevel = useChatStore((state) => state.volumeLevel);
+  const setVoiceMode = useChatStore((state) => state.setVoiceMode);
 
   const {
     sendAudioMessage,

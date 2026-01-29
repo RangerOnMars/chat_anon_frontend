@@ -11,7 +11,9 @@ interface ChatInputProps {
 export function ChatInput({ onSend, disabled }: ChatInputProps) {
   const [input, setInput] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { isThinking, connectionStatus } = useChatStore();
+  // Use selectors to avoid subscribing to entire store
+  const isThinking = useChatStore((state) => state.isThinking);
+  const connectionStatus = useChatStore((state) => state.connectionStatus);
 
   const isDisabled = disabled || connectionStatus !== 'connected' || isThinking;
 

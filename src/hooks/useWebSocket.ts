@@ -15,22 +15,19 @@ export function useWebSocket() {
   const pingIntervalRef = useRef<number | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
   
-  const {
-    apiToken,
-    connectionStatus,
-    ws,
-    setWs,
-    setConnectionStatus,
-    setErrorMessage,
-    setCurrentCharacter,
-    setCharacters,
-    addMessage,
-    setPartialTranscription,
-    setPipelineStage,
-    setIsThinking,
-    setIsPlaying,
-    clearMessages,
-  } = useChatStore();
+  // Use selectors to only subscribe to specific state values we need for rendering
+  // Actions (setters) are always stable and don't cause re-renders
+  const setCharacters = useChatStore((state) => state.setCharacters);
+  const setConnectionStatus = useChatStore((state) => state.setConnectionStatus);
+  const setErrorMessage = useChatStore((state) => state.setErrorMessage);
+  const setCurrentCharacter = useChatStore((state) => state.setCurrentCharacter);
+  const setWs = useChatStore((state) => state.setWs);
+  const addMessage = useChatStore((state) => state.addMessage);
+  const setPartialTranscription = useChatStore((state) => state.setPartialTranscription);
+  const setPipelineStage = useChatStore((state) => state.setPipelineStage);
+  const setIsThinking = useChatStore((state) => state.setIsThinking);
+  const setIsPlaying = useChatStore((state) => state.setIsPlaying);
+  const clearMessages = useChatStore((state) => state.clearMessages);
 
   // Fetch available characters
   const fetchCharacters = useCallback(async () => {
@@ -47,9 +44,8 @@ export function useWebSocket() {
     return [];
   }, [setCharacters]);
 
-  // Send message through WebSocket - uses store's ws directly
+  // Send message through WebSocket - uses store's ws directly via getState()
   const sendMessage = useCallback((message: ClientMessage) => {
-    // Get the current WebSocket from store
     const currentWs = useChatStore.getState().ws;
     if (currentWs?.readyState === WebSocket.OPEN) {
       currentWs.send(JSON.stringify(message));
@@ -91,7 +87,6 @@ export function useWebSocket() {
 
         case 'asr_end':
           setPartialTranscription('');
-          // Add user message with recognized text
           addMessage({
             id: crypto.randomUUID(),
             role: 'user',
@@ -105,13 +100,11 @@ export function useWebSocket() {
           break;
 
         case 'llm_end':
-          // LLM processing complete
           break;
 
         case 'tts_start':
           setPipelineStage('tts');
-          // Store emotion for Live2D
-          useChatStore.getState().setIsThinking(false);
+          setIsThinking(false);
           break;
 
         case 'transcription':
@@ -125,7 +118,6 @@ export function useWebSocket() {
         case 'audio_chunk':
           setPipelineStage('playing');
           setIsPlaying(true);
-          // Audio chunks are handled by useAudioPlayer
           break;
 
         case 'audio_end':
@@ -147,11 +139,9 @@ export function useWebSocket() {
           break;
 
         case 'audio_stream_started':
-          // Audio streaming started
           break;
 
         case 'agent_listening':
-          // Agent is ready to listen
           setPipelineStage('idle');
           setIsThinking(false);
           break;
@@ -171,7 +161,6 @@ export function useWebSocket() {
           break;
 
         case 'pong':
-          // Heartbeat response
           break;
 
         case 'error':
@@ -197,7 +186,6 @@ export function useWebSocket() {
 
   // Connect to WebSocket
   const connect = useCallback((characterName: string = 'anon') => {
-    // Get current state from store
     const currentWs = useChatStore.getState().ws;
     const currentToken = useChatStore.getState().apiToken;
     
@@ -217,7 +205,6 @@ export function useWebSocket() {
     setWs(newWs);
 
     newWs.onopen = () => {
-      // Send connect message directly through the new WebSocket
       newWs.send(JSON.stringify({
         type: 'connect',
         api_token: currentToken,
@@ -244,13 +231,12 @@ export function useWebSocket() {
       setConnectionStatus('disconnected');
       setWs(null);
 
-      // Clear ping interval
       if (pingIntervalRef.current) {
         clearInterval(pingIntervalRef.current);
         pingIntervalRef.current = null;
       }
 
-      // Auto reconnect if was connected
+      // Auto reconnect only if was previously connected
       const status = useChatStore.getState().connectionStatus;
       if (status === 'connected') {
         reconnectTimeoutRef.current = window.setTimeout(() => {
@@ -351,8 +337,7 @@ export function useWebSocket() {
     sendMessage({ type: 'clear_history' });
   }, [sendMessage]);
 
-  // Cleanup on unmount - only cleanup intervals, not the WebSocket itself
-  // The WebSocket is shared, so we don't want to close it when one component unmounts
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (reconnectTimeoutRef.current) {
@@ -362,20 +347,6 @@ export function useWebSocket() {
         clearInterval(pingIntervalRef.current);
       }
     };
-  }, []);
-
-  // Message handler ref for audio player
-  const addMessageHandler = useCallback((handler: (event: MessageEvent) => void) => {
-    const currentWs = useChatStore.getState().ws;
-    if (currentWs) {
-      const originalHandler = currentWs.onmessage;
-      currentWs.onmessage = (event) => {
-        if (originalHandler) {
-          (originalHandler as (event: MessageEvent) => void)(event);
-        }
-        handler(event);
-      };
-    }
   }, []);
 
   return {
@@ -392,7 +363,5 @@ export function useWebSocket() {
     switchCharacter,
     clearHistory,
     fetchCharacters,
-    addMessageHandler,
-    ws,
   };
 }

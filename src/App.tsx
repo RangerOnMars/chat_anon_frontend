@@ -10,7 +10,10 @@ import { StatusIndicator } from '@/components/StatusIndicator';
 import { cn } from '@/utils/cn';
 
 function App() {
-  const { isDarkMode, errorMessage, setErrorMessage } = useChatStore();
+  // Use selectors to avoid subscribing to entire store
+  const isDarkMode = useChatStore((state) => state.isDarkMode);
+  const errorMessage = useChatStore((state) => state.errorMessage);
+  const setErrorMessage = useChatStore((state) => state.setErrorMessage);
   const { fetchCharacters } = useWebSocket();
   
   // Initialize audio player

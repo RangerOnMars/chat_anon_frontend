@@ -8,12 +8,11 @@ import { cn } from '@/utils/cn';
 
 export function ChatPanel() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const {
-    messages,
-    partialTranscription,
-    isThinking,
-    connectionStatus,
-  } = useChatStore();
+  // Use selectors to avoid subscribing to entire store
+  const messages = useChatStore((state) => state.messages);
+  const partialTranscription = useChatStore((state) => state.partialTranscription);
+  const isThinking = useChatStore((state) => state.isThinking);
+  const connectionStatus = useChatStore((state) => state.connectionStatus);
   const { sendTextMessage } = useWebSocket();
 
   // Auto scroll to bottom
