@@ -11,10 +11,10 @@ import { cn } from '@/utils/cn';
 
 function App() {
   const { isDarkMode, errorMessage, setErrorMessage } = useChatStore();
-  const { wsRef, fetchCharacters } = useWebSocket();
+  const { fetchCharacters } = useWebSocket();
   
   // Initialize audio player
-  useAudioPlayer(wsRef);
+  useAudioPlayer();
 
   // Fetch characters on mount
   useEffect(() => {

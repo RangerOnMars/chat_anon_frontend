@@ -10,12 +10,11 @@ export interface AudioPlayerOptions {
 }
 
 export function useAudioPlayer(
-  wsRef: React.RefObject<WebSocket | null>,
   options: AudioPlayerOptions = {}
 ) {
   const { onPlaybackStart, onPlaybackEnd, onVolumeChange } = options;
   
-  const { setIsPlaying, setVolumeLevel } = useChatStore();
+  const { ws, setIsPlaying, setVolumeLevel } = useChatStore();
   
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioQueueRef = useRef<AudioBuffer[]>([]);
@@ -174,7 +173,6 @@ export function useAudioPlayer(
 
   // Handle WebSocket messages for audio
   useEffect(() => {
-    const ws = wsRef.current;
     if (!ws) return;
 
     const handleMessage = (event: MessageEvent) => {
@@ -200,7 +198,7 @@ export function useAudioPlayer(
     return () => {
       ws.removeEventListener('message', handleMessage);
     };
-  }, [wsRef, addAudioChunk]);
+  }, [ws, addAudioChunk]);
 
   // Cleanup on unmount
   useEffect(() => {

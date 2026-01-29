@@ -12,13 +12,14 @@ const PING_INTERVAL = 30000; // 30 seconds
 const RECONNECT_DELAY = 3000; // 3 seconds
 
 export function useWebSocket() {
-  const wsRef = useRef<WebSocket | null>(null);
   const pingIntervalRef = useRef<number | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
   
   const {
     apiToken,
     connectionStatus,
+    ws,
+    setWs,
     setConnectionStatus,
     setErrorMessage,
     setCurrentCharacter,
@@ -46,10 +47,12 @@ export function useWebSocket() {
     return [];
   }, [setCharacters]);
 
-  // Send message through WebSocket
+  // Send message through WebSocket - uses store's ws directly
   const sendMessage = useCallback((message: ClientMessage) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(message));
+    // Get the current WebSocket from store
+    const currentWs = useChatStore.getState().ws;
+    if (currentWs?.readyState === WebSocket.OPEN) {
+      currentWs.send(JSON.stringify(message));
     } else {
       console.error('WebSocket is not connected');
     }
@@ -194,11 +197,15 @@ export function useWebSocket() {
 
   // Connect to WebSocket
   const connect = useCallback((characterName: string = 'anon') => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
+    // Get current state from store
+    const currentWs = useChatStore.getState().ws;
+    const currentToken = useChatStore.getState().apiToken;
+    
+    if (currentWs?.readyState === WebSocket.OPEN) {
       return;
     }
 
-    if (!apiToken) {
+    if (!currentToken) {
       setErrorMessage('请输入 API Token');
       return;
     }
@@ -206,32 +213,36 @@ export function useWebSocket() {
     setConnectionStatus('connecting');
     setErrorMessage(null);
 
-    const ws = new WebSocket(WS_URL);
-    wsRef.current = ws;
+    const newWs = new WebSocket(WS_URL);
+    setWs(newWs);
 
-    ws.onopen = () => {
-      sendMessage({
+    newWs.onopen = () => {
+      // Send connect message directly through the new WebSocket
+      newWs.send(JSON.stringify({
         type: 'connect',
-        api_token: apiToken,
+        api_token: currentToken,
         character_name: characterName,
-      });
+      }));
 
       // Start ping interval
       pingIntervalRef.current = window.setInterval(() => {
-        sendMessage({ type: 'ping' });
+        const ws = useChatStore.getState().ws;
+        if (ws?.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'ping' }));
+        }
       }, PING_INTERVAL);
     };
 
-    ws.onmessage = handleMessage;
+    newWs.onmessage = handleMessage;
 
-    ws.onerror = () => {
+    newWs.onerror = () => {
       setConnectionStatus('error');
       setErrorMessage('连接错误');
     };
 
-    ws.onclose = () => {
+    newWs.onclose = () => {
       setConnectionStatus('disconnected');
-      wsRef.current = null;
+      setWs(null);
 
       // Clear ping interval
       if (pingIntervalRef.current) {
@@ -240,13 +251,14 @@ export function useWebSocket() {
       }
 
       // Auto reconnect if was connected
-      if (connectionStatus === 'connected') {
+      const status = useChatStore.getState().connectionStatus;
+      if (status === 'connected') {
         reconnectTimeoutRef.current = window.setTimeout(() => {
           connect(characterName);
         }, RECONNECT_DELAY);
       }
     };
-  }, [apiToken, connectionStatus, handleMessage, sendMessage, setConnectionStatus, setErrorMessage]);
+  }, [handleMessage, setConnectionStatus, setErrorMessage, setWs]);
 
   // Disconnect from WebSocket
   const disconnect = useCallback(() => {
@@ -260,13 +272,14 @@ export function useWebSocket() {
       pingIntervalRef.current = null;
     }
 
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
+    const currentWs = useChatStore.getState().ws;
+    if (currentWs) {
+      currentWs.close();
+      setWs(null);
     }
 
     setConnectionStatus('disconnected');
-  }, [setConnectionStatus]);
+  }, [setConnectionStatus, setWs]);
 
   // Send text message
   const sendTextMessage = useCallback((content: string) => {
@@ -338,19 +351,25 @@ export function useWebSocket() {
     sendMessage({ type: 'clear_history' });
   }, [sendMessage]);
 
-  // Cleanup on unmount
+  // Cleanup on unmount - only cleanup intervals, not the WebSocket itself
+  // The WebSocket is shared, so we don't want to close it when one component unmounts
   useEffect(() => {
     return () => {
-      disconnect();
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (pingIntervalRef.current) {
+        clearInterval(pingIntervalRef.current);
+      }
     };
-  }, [disconnect]);
+  }, []);
 
   // Message handler ref for audio player
   const addMessageHandler = useCallback((handler: (event: MessageEvent) => void) => {
-    const ws = wsRef.current;
-    if (ws) {
-      const originalHandler = ws.onmessage;
-      ws.onmessage = (event) => {
+    const currentWs = useChatStore.getState().ws;
+    if (currentWs) {
+      const originalHandler = currentWs.onmessage;
+      currentWs.onmessage = (event) => {
         if (originalHandler) {
           (originalHandler as (event: MessageEvent) => void)(event);
         }
@@ -374,6 +393,6 @@ export function useWebSocket() {
     clearHistory,
     fetchCharacters,
     addMessageHandler,
-    wsRef,
+    ws,
   };
 }

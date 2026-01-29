@@ -20,6 +20,10 @@ interface ChatState {
   errorMessage: string | null;
   apiToken: string;
   
+  // WebSocket - shared instance
+  ws: WebSocket | null;
+  setWs: (ws: WebSocket | null) => void;
+  
   // Character
   currentCharacter: Character | null;
   characters: Character[];
@@ -65,6 +69,7 @@ const initialState = {
   connectionStatus: 'disconnected' as ConnectionStatus,
   errorMessage: null,
   apiToken: localStorage.getItem('apiToken') || '',
+  ws: null as WebSocket | null,
   currentCharacter: null,
   characters: [],
   messages: [],
@@ -87,6 +92,7 @@ export const useChatStore = create<ChatState>((set) => ({
     localStorage.setItem('apiToken', token);
     set({ apiToken: token });
   },
+  setWs: (ws) => set({ ws }),
   setCurrentCharacter: (character) => set({ currentCharacter: character }),
   setCharacters: (characters) => set({ characters }),
   
