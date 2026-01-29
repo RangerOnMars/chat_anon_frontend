@@ -110,8 +110,10 @@ export function useLive2D(modelPath: string) {
       setIsLoaded(true);
       setLoadError(null);
 
-      // Start idle animation
-      startIdleAnimation();
+      // Start idle animation after delay to ensure model is ready
+      setTimeout(() => {
+        startIdleAnimation();
+      }, 1000);
 
     } catch (error) {
       console.error('Failed to load Live2D model:', error);
@@ -182,14 +184,14 @@ export function useLive2D(modelPath: string) {
 
     idleIntervalRef.current = window.setInterval(() => {
       const model = modelRef.current;
-      if (model) {
-        // Random idle motion every 10-20 seconds
-        const randomDelay = 10000 + Math.random() * 10000;
-        setTimeout(() => {
+      if (model?.internalModel?.motionManager) {
+        try {
           model.motion('idle', Math.floor(Math.random() * 3));
-        }, randomDelay);
+        } catch (error) {
+          console.warn('Failed to play idle motion:', error);
+        }
       }
-    }, 20000);
+    }, 15000);
   }, []);
 
   // Stop idle animation loop

@@ -87,6 +87,16 @@ body {
   background-clip: text;
 }
 
+/* Spin animation for loading */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* Pulsing animation for recording */
 @keyframes pulse-ring {
   0% {

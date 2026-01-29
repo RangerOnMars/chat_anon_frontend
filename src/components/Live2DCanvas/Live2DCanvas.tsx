@@ -102,7 +102,16 @@ export function Live2DCanvas() {
       {/* Loading State */}
       {!isLoaded && !loadError && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 backdrop-blur-sm">
-          <Loader2 size={48} className="animate-spin text-primary-400 mb-4" />
+          <div 
+            className="text-primary-400 mb-4"
+            style={{
+              width: 48,
+              height: 48,
+              animation: 'spin 1s linear infinite',
+            }}
+          >
+            <Loader2 size={48} />
+          </div>
           <p className="text-sm opacity-70">加载 Live2D 模型中...</p>
         </div>
       )}
