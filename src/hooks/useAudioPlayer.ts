@@ -17,6 +17,7 @@ export function useAudioPlayer(
   // Use selectors to avoid subscribing to entire store
   const ws = useChatStore((state) => state.ws);
   const setIsPlaying = useChatStore((state) => state.setIsPlaying);
+  const setPipelineStage = useChatStore((state) => state.setPipelineStage);
   const setVolumeLevel = useChatStore((state) => state.setVolumeLevel);
   
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -27,6 +28,8 @@ export function useAudioPlayer(
   const scheduledSourcesRef = useRef<AudioBufferSourceNode[]>([]);
   const lastScheduledEndTimeRef = useRef(0);
   const playbackCheckIntervalRef = useRef<number | null>(null);
+  /** True after audio_end received; playback is "done" only when stream ended AND queue drained */
+  const streamEndedRef = useRef(false);
 
   // Initialize audio context
   const getAudioContext = useCallback(() => {
@@ -96,17 +99,20 @@ export function useAudioPlayer(
     setVolumeLevel(0);
   }, [setVolumeLevel]);
 
-  // Check if playback has ended
+  // Check if playback has ended (only after stream ended AND queue drained)
   const checkPlaybackEnded = useCallback(() => {
     const audioContext = audioContextRef.current;
     if (!audioContext) return;
     
+    // Require streamEnded (audio_end received) so we don't flicker off during chunk gaps
+    if (!streamEndedRef.current) return;
     // If current time has passed the last scheduled end time, playback is done
     if (isPlayingRef.current && audioContext.currentTime >= lastScheduledEndTimeRef.current) {
       // Clean up finished sources
       scheduledSourcesRef.current = [];
       isPlayingRef.current = false;
       setIsPlaying(false);
+      setPipelineStage('idle');
       stopVolumeMonitoring();
       onPlaybackEnd?.();
       
@@ -116,7 +122,7 @@ export function useAudioPlayer(
         playbackCheckIntervalRef.current = null;
       }
     }
-  }, [setIsPlaying, stopVolumeMonitoring, onPlaybackEnd]);
+  }, [setIsPlaying, setPipelineStage, stopVolumeMonitoring, onPlaybackEnd]);
 
   // Schedule audio buffer for playback (pre-scheduling approach)
   const scheduleBuffer = useCallback((buffer: AudioBuffer) => {
@@ -199,6 +205,7 @@ export function useAudioPlayer(
     
     // Reset scheduling state
     lastScheduledEndTimeRef.current = 0;
+    streamEndedRef.current = false;
 
     isPlayingRef.current = false;
     setIsPlaying(false);
@@ -220,6 +227,7 @@ export function useAudioPlayer(
             getAudioContext();
             // Reset scheduling state for the new TTS session so first chunk plays immediately
             lastScheduledEndTimeRef.current = 0;
+            streamEndedRef.current = false;
             break;
 
           case 'audio_chunk':
@@ -227,7 +235,8 @@ export function useAudioPlayer(
             break;
 
           case 'audio_end':
-            // Audio stream ended, let queue finish playing
+            // Stream finished sending; playback ends only when queue drains (checkPlaybackEnded)
+            streamEndedRef.current = true;
             break;
         }
       } catch {

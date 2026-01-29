@@ -49,11 +49,14 @@ const stages: PipelineStage[] = ['asr', 'llm', 'tts', 'playing'];
 export function StatusIndicator() {
   // Use selectors to avoid subscribing to entire store
   const pipelineStage = useChatStore((state) => state.pipelineStage);
+  const isPlaying = useChatStore((state) => state.isPlaying);
   const isThinking = useChatStore((state) => state.isThinking);
   const partialTranscription = useChatStore((state) => state.partialTranscription);
 
-  const currentStageIndex = stages.indexOf(pipelineStage);
-  const isProcessing = pipelineStage !== 'idle' || isThinking;
+  // Playing stage follows isPlaying (same as Live2D) so speaker indicator stays in sync with actual playback
+  const effectiveStage: PipelineStage = isPlaying ? 'playing' : pipelineStage;
+  const currentStageIndex = stages.indexOf(effectiveStage);
+  const isProcessing = pipelineStage !== 'idle' || isThinking || isPlaying;
 
   return (
     <div className="glass rounded-xl p-4">
@@ -61,7 +64,7 @@ export function StatusIndicator() {
       <div className="flex items-center justify-between mb-3">
         {stages.map((stage, index) => {
           const config = stageConfig[stage];
-          const isActive = stage === pipelineStage;
+          const isActive = stage === effectiveStage;
           const isCompleted = currentStageIndex > index;
           const Icon = config.icon;
 
@@ -106,7 +109,7 @@ export function StatusIndicator() {
       <div className="flex items-center justify-between text-xs">
         {stages.map((stage) => {
           const config = stageConfig[stage];
-          const isActive = stage === pipelineStage;
+          const isActive = stage === effectiveStage;
 
           return (
             <div
@@ -131,11 +134,11 @@ export function StatusIndicator() {
               <span
                 className={cn(
                   'w-2 h-2 rounded-full animate-pulse',
-                  stageConfig[pipelineStage]?.bgColor || 'bg-primary-500'
+                  stageConfig[effectiveStage]?.bgColor || 'bg-primary-500'
                 )}
               />
               <span className="text-sm">
-                {stageConfig[pipelineStage]?.label || '处理中'}...
+                {stageConfig[effectiveStage]?.label || '处理中'}...
               </span>
             </>
           ) : (

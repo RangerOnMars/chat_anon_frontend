@@ -121,8 +121,9 @@ export function useWebSocket() {
           break;
 
         case 'audio_end':
-          setIsPlaying(false);
-          setPipelineStage('idle');
+          // Stream ended; do NOT set isPlaying(false) here - playback may still be
+          // draining the queue. useAudioPlayer will set isPlaying(false) and
+          // pipelineStage when the queue actually finishes (checkPlaybackEnded).
           break;
 
         case 'response':
