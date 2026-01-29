@@ -215,6 +215,13 @@ export function useAudioPlayer(
         const message: ServerMessage = JSON.parse(event.data);
 
         switch (message.type) {
+          case 'tts_start':
+            // Pre-initialize AudioContext when TTS starts to reduce latency on first chunk
+            getAudioContext();
+            // Reset scheduling state for the new TTS session so first chunk plays immediately
+            lastScheduledEndTimeRef.current = 0;
+            break;
+
           case 'audio_chunk':
             addAudioChunk(message.audio_base64, message.audio_sample_rate);
             break;
@@ -233,7 +240,7 @@ export function useAudioPlayer(
     return () => {
       ws.removeEventListener('message', handleMessage);
     };
-  }, [ws, addAudioChunk]);
+  }, [ws, addAudioChunk, getAudioContext]);
 
   // Cleanup on unmount
   useEffect(() => {
