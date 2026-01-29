@@ -57,12 +57,14 @@ export function useLive2D(modelPath: string) {
       await new Promise(resolve => requestAnimationFrame(resolve));
       
       // Create PIXI application (PIXI v7 API - options in constructor)
+      // Cap resolution at 2 to avoid OOM on high-DPI screens (3x/4x can use 2–4GB+)
+      const resolution = Math.min(window.devicePixelRatio || 1, 2);
       const app = new PIXI.Application({
         view: document.createElement('canvas'),
         resizeTo: container,
         backgroundAlpha: 0,
-        antialias: true,
-        resolution: window.devicePixelRatio || 1,
+        antialias: false, // Disable to reduce GPU memory
+        resolution,
         autoDensity: true,
       });
 
@@ -226,15 +228,23 @@ export function useLive2D(modelPath: string) {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Cleanup
+  // Cleanup: destroy model first to release Live2D textures, then PIXI app
   useEffect(() => {
     return () => {
       stopIdleAnimation();
+      const model = modelRef.current;
+      if (model) {
+        try {
+          if (typeof model.destroy === 'function') model.destroy({ children: true, texture: true });
+        } catch (_) {
+          // Ignore destroy errors
+        }
+        modelRef.current = null;
+      }
       if (appRef.current) {
         appRef.current.destroy(true, { children: true, texture: true });
         appRef.current = null;
       }
-      modelRef.current = null;
     };
   }, [stopIdleAnimation]);
 
