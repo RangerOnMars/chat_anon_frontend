@@ -5,6 +5,20 @@ import { Live2DModel } from 'pixi-live2d-display';
 // Register Live2D with PIXI
 window.PIXI = PIXI;
 
+/** Patch display object and all descendants for Pixi v7 EventBoundary (isInteractive). */
+function patchPixiV7Interaction(obj: unknown): void {
+  const o = obj as Record<string, unknown>;
+  if (typeof o.isInteractive !== 'function') {
+    o.isInteractive = () => false;
+  }
+  const children = o.children as unknown[] | undefined;
+  if (Array.isArray(children)) {
+    for (const child of children) {
+      patchPixiV7Interaction(child);
+    }
+  }
+}
+
 // Emotion to motion mapping based on the model's motion groups
 const emotionMotionMap: Record<string, { group: string; indices: number[] }> = {
   happy: { group: 'rana', indices: [0, 1, 2, 3] }, // smile motions
@@ -95,19 +109,27 @@ export function useLive2D(modelPath: string) {
       // Add to stage
       app.stage.addChild(model);
 
-      // Enable mouse tracking
-      model.on('pointermove', (e: PIXI.FederatedPointerEvent) => {
-        const point = e.global;
-        model.focus(point.x, point.y);
-      });
+      // Pixi v7 EventBoundary calls isInteractive() on display objects; Live2D objects don't have it. Patch model and all children.
+      patchPixiV7Interaction(model);
 
-      // Handle click on hit areas
-      model.on('hit', (hitAreas: string[]) => {
-        console.log('Hit areas:', hitAreas);
-        if (hitAreas.includes('face')) {
-          model.motion('rana', Math.floor(Math.random() * 4));
-        }
-      });
+      // Handle pointer on canvas for focus and click (canvas listeners still work)
+      const canvas = app.view as HTMLCanvasElement;
+      const onCanvasPointerMove = (e: MouseEvent) => {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        model.focus(x, y);
+      };
+      const onCanvasClick = () => {
+        model.motion('rana', Math.floor(Math.random() * 4));
+      };
+      canvas.addEventListener('pointermove', onCanvasPointerMove);
+      canvas.addEventListener('click', onCanvasClick);
+      const modelExt = model as unknown as Record<string, unknown>;
+      modelExt._canvasPointerMove = onCanvasPointerMove;
+      modelExt._canvasClick = onCanvasClick;
+      modelExt._canvasEl = canvas;
+      if ('eventMode' in model) modelExt.eventMode = 'none';
 
       setIsLoaded(true);
       setLoadError(null);
@@ -234,6 +256,14 @@ export function useLive2D(modelPath: string) {
       stopIdleAnimation();
       const model = modelRef.current;
       if (model) {
+        const modelExt = model as unknown as Record<string, unknown>;
+        const canvas = modelExt._canvasEl as HTMLCanvasElement | undefined;
+        const onMove = modelExt._canvasPointerMove as ((e: MouseEvent) => void) | undefined;
+        const onClick = modelExt._canvasClick as (() => void) | undefined;
+        if (canvas) {
+          if (onMove) canvas.removeEventListener('pointermove', onMove);
+          if (onClick) canvas.removeEventListener('click', onClick);
+        }
         try {
           if (typeof model.destroy === 'function') model.destroy({ children: true, texture: true });
         } catch (_) {
