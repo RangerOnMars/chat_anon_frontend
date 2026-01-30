@@ -137,8 +137,13 @@ export interface ResponseMessage {
   content_cn: string;
   content_jp: string;
   emotion: string;
-  audio_format: string;
-  audio_sample_rate: number;
+  audio_format?: string;
+  audio_sample_rate?: number;
+}
+
+/** Sent after all sentences' audio has been sent (after audio_end). Client should treat turn as complete. */
+export interface TurnEndMessage {
+  type: 'turn_end';
 }
 
 export interface AudioStreamStartedMessage {
@@ -185,6 +190,7 @@ export type ServerMessage =
   | AudioChunkMessage
   | AudioEndMessage
   | ResponseMessage
+  | TurnEndMessage
   | AudioStreamStartedMessage
   | AgentListeningMessage
   | CharacterSwitchedMessage

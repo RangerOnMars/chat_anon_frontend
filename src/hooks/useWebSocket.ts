@@ -127,8 +127,9 @@ export function useWebSocket() {
           break;
 
         case 'response':
+          // Per-sentence response (multi-sentence TTS: one response per sentence).
+          // Only add message; do NOT set pipeline to idle here — wait for turn_end.
           setIsThinking(false);
-          setPipelineStage('idle');
           addMessage({
             id: crypto.randomUUID(),
             role: 'assistant',
@@ -137,6 +138,12 @@ export function useWebSocket() {
             emotion: message.emotion,
             timestamp: new Date(),
           });
+          break;
+
+        case 'turn_end':
+          // Turn complete (all sentences sent). Idle pipeline; playback may still be draining.
+          setIsThinking(false);
+          setPipelineStage('idle');
           break;
 
         case 'audio_stream_started':

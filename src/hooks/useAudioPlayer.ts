@@ -222,12 +222,17 @@ export function useAudioPlayer(
         const message: ServerMessage = JSON.parse(event.data);
 
         switch (message.type) {
+          case 'llm_start':
+            // New turn: reset scheduling so first sentence's chunks start from current time.
+            // Do NOT reset on tts_start — multi-sentence sends one tts_start per sentence;
+            // resetting there would make sentence 2+ start at "now" and overlap with previous.
+            lastScheduledEndTimeRef.current = 0;
+            streamEndedRef.current = false;
+            break;
+
           case 'tts_start':
             // Pre-initialize AudioContext when TTS starts to reduce latency on first chunk
             getAudioContext();
-            // Reset scheduling state for the new TTS session so first chunk plays immediately
-            lastScheduledEndTimeRef.current = 0;
-            streamEndedRef.current = false;
             break;
 
           case 'audio_chunk':
