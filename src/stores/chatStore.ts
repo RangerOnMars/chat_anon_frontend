@@ -41,6 +41,8 @@ interface ChatState {
   isRecording: boolean;
   isPlaying: boolean;
   volumeLevel: number;
+  /** Shared ref updated every frame by audio player; lip sync reads this to avoid React batching lag. */
+  volumeLevelRef: { current: number };
   
   // Theme
   isDarkMode: boolean;
@@ -80,6 +82,7 @@ const initialState = {
   isRecording: false,
   isPlaying: false,
   volumeLevel: 0,
+  volumeLevelRef: { current: 0 },
   isDarkMode: localStorage.getItem('darkMode') !== 'false',
 };
 
@@ -132,5 +135,8 @@ export const useChatStore = create<ChatState>((set) => ({
     
   clearMessages: () => set({ messages: [], partialTranscription: '' }),
   
-  reset: () => set(initialState),
+  reset: () => set((state) => {
+    state.volumeLevelRef.current = 0;
+    return { ...initialState };
+  }),
 }));

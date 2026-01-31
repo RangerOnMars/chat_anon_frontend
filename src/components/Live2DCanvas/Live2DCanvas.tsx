@@ -7,6 +7,11 @@ import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 // Model path - adjust if needed
 const MODEL_PATH = '/live2d/live2D_model/3.model.json';
 
+/** Scale RMS to mouth opening; higher = wider mouth. Increased so movement is clearly visible. */
+const LIP_SYNC_SCALE = 1.4;
+/** Power < 1 makes small RMS open mouth more; lower = more sensitive to quiet sounds. */
+const LIP_SYNC_POWER = 0.6;
+
 export function Live2DCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const { initialize, isLoaded, loadError, controller } = useLive2D(MODEL_PATH);
@@ -36,35 +41,22 @@ export function Live2DCanvas() {
     }
   }, [messages, isLoaded, controller]);
 
-  // Simulate lip sync when audio is playing
+  // Lip sync: read volume from store's ref every frame (avoids React batching lag; player writes ref every rAF)
   useEffect(() => {
     if (!isLoaded) return;
 
+    const volRef = useChatStore.getState().volumeLevelRef;
     let animationFrame: number;
-    let lipSyncValue = 0;
-    let increasing = true;
 
     const animateLipSync = () => {
       if (isPlaying) {
-        // Simple sine wave animation for lip sync
-        if (increasing) {
-          lipSyncValue += 0.15;
-          if (lipSyncValue >= 1) {
-            increasing = false;
-          }
-        } else {
-          lipSyncValue -= 0.15;
-          if (lipSyncValue <= 0) {
-            increasing = true;
-          }
-        }
-        // Add some randomness
-        const randomized = lipSyncValue * (0.7 + Math.random() * 0.3);
-        controller.setLipSync(randomized);
+        const r = volRef.current;
+        const curved = Math.pow(Math.max(0, r), LIP_SYNC_POWER);
+        const mouthValue = Math.min(1, curved * LIP_SYNC_SCALE);
+        controller.setLipSync(mouthValue);
       } else {
         controller.setLipSync(0);
       }
-
       animationFrame = requestAnimationFrame(animateLipSync);
     };
 

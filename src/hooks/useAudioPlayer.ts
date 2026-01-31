@@ -58,12 +58,12 @@ export function useAudioPlayer(
     return audioContextRef.current;
   }, []);
 
-  // Volume monitoring
+  // Volume monitoring: RMS from time domain (matches Python WavHandler.GetRms() for lip sync)
   const startVolumeMonitoring = useCallback(() => {
     const analyser = analyserRef.current;
     if (!analyser) return;
 
-    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+    const timeData = new Uint8Array(analyser.fftSize);
 
     const updateVolume = () => {
       if (!isPlayingRef.current) {
@@ -71,16 +71,28 @@ export function useAudioPlayer(
         return;
       }
 
-      analyser.getByteFrequencyData(dataArray);
-      
-      // Calculate average volume
-      let sum = 0;
-      for (let i = 0; i < dataArray.length; i++) {
-        sum += dataArray[i];
+      analyser.getByteTimeDomainData(timeData);
+
+      // RMS: sample_i = (v - 128) / 128, rms = sqrt(mean(sample_i^2))
+      let sumSq = 0;
+      for (let i = 0; i < timeData.length; i++) {
+        const sample = (timeData[i] - 128) / 128;
+        sumSq += sample * sample;
       }
-      const average = sum / dataArray.length;
-      const volume = average / 255;
-      
+      const rms = Math.sqrt(sumSq / timeData.length);
+      const volume = Math.min(1, rms * 2);
+
+      // Write to shared ref every frame so lip sync reads latest without depending on React re-renders
+      useChatStore.getState().volumeLevelRef.current = volume;
+
+      // #region agent log
+      if (Math.random() < 0.02) fetch('http://127.0.0.1:7243/ingest/f4c89dae-c5c6-4ddf-83b3-ea85c173d520',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useAudioPlayer.ts:updateVolume',message:'RMS/volume',data:{rms,volume},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+      if (typeof (window as unknown as { __lipSyncFrame?: number }).__lipSyncFrame === 'undefined') (window as unknown as { __lipSyncFrame: number }).__lipSyncFrame = 0;
+      const w = window as unknown as { __lipSyncFrame: number };
+      w.__lipSyncFrame++;
+      if (w.__lipSyncFrame % 60 === 0) console.debug('[LipSync] player', { frame: w.__lipSyncFrame, rms, volume });
+      // #endregion
+
       setVolumeLevel(volume);
       onVolumeChange?.(volume);
 
@@ -96,6 +108,7 @@ export function useAudioPlayer(
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
     }
+    useChatStore.getState().volumeLevelRef.current = 0;
     setVolumeLevel(0);
   }, [setVolumeLevel]);
 

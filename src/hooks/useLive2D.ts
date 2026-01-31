@@ -1,4 +1,4 @@
-import { useCallback, useRef, useEffect, useState } from 'react';
+import { useCallback, useRef, useEffect, useState, useMemo } from 'react';
 import * as PIXI from 'pixi.js';
 import { Live2DModel } from 'pixi-live2d-display';
 
@@ -41,7 +41,11 @@ const emotionExpressionMap: Record<string, string> = {
   idle: 'idle01',
   shame: 'shame01',
   cry: 'cry01',
+  neutral: 'normal', // 中立表情，用于唇形测试
 };
+
+/** 测试时强制使用中立表情，便于观察嘴部开合；设为 false 可恢复按情绪切换表情 */
+const USE_NEUTRAL_EXPRESSION_FOR_TEST = true;
 
 export interface Live2DController {
   playEmotion: (emotion: string) => void;
@@ -57,6 +61,13 @@ export function useLive2D(modelPath: string) {
   const modelRef = useRef<Live2DModel | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const idleIntervalRef = useRef<number | null>(null);
+  const lipSyncPrevRef = useRef<number>(0);
+  /** Desired mouth value (0–1), applied in ticker after model update so motion doesn't overwrite. */
+  const lipSyncValueRef = useRef<number>(0);
+  /** Cached mouth param index and API so we apply in ticker without re-resolving. */
+  const mouthParamIndexRef = useRef<number>(-1);
+  const mouthUseCub2Ref = useRef<boolean>(false);
+  const lipSyncParamNotFoundLogRef = useRef<number>(0);
   const [isLoaded, setIsLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -134,6 +145,105 @@ export function useLive2D(modelPath: string) {
       setIsLoaded(true);
       setLoadError(null);
 
+      // 默认设为中立表情（便于唇形测试）
+      const defaultExpression = USE_NEUTRAL_EXPRESSION_FOR_TEST ? (emotionExpressionMap.neutral ?? 'normal') : emotionExpressionMap.idle;
+      try {
+        model.expression(defaultExpression);
+      } catch (_) {
+        // 模型可能没有 normal，忽略
+      }
+
+      // Resolve mouth param index (Cubism 4 or 2). Call when index is -1 so we retry until model is ready.
+      const tryResolveMouthParam = () => {
+        const coreModel = model.internalModel?.coreModel as {
+          getParameterIndex?: (name: string) => number;
+          getParamIndex?: (name: string) => number;
+        } | undefined;
+        if (!coreModel) return;
+        const paramNames = ['PARAM_MOUTH_OPEN_Y', 'ParamMouthOpenY', 'Mouth_Open'];
+        for (const paramName of paramNames) {
+          try {
+            const idx4 = coreModel.getParameterIndex?.(paramName) ?? -1;
+            if (idx4 >= 0) {
+              mouthParamIndexRef.current = idx4;
+              mouthUseCub2Ref.current = false;
+              console.debug('[Live2D] Lip sync param resolved (Cubism 4):', paramName);
+              return;
+            }
+          } catch {
+            //
+          }
+        }
+        for (const paramName of paramNames) {
+          try {
+            const idx2 = coreModel.getParamIndex?.(paramName) ?? -1;
+            if (idx2 >= 0) {
+              mouthParamIndexRef.current = idx2;
+              mouthUseCub2Ref.current = true;
+              console.debug('[Live2D] Lip sync param resolved (Cubism 2):', paramName);
+              return;
+            }
+          } catch {
+            //
+          }
+        }
+      };
+
+      // Apply lip sync: write mouth param. Used in beforeModelUpdate (after physics/pose, before model.update/loadParam) and after origUpdate (after loadParam) so we win over physics/breath.
+      const applyMouthFromRef = () => {
+        const val = lipSyncValueRef.current;
+        if (mouthParamIndexRef.current < 0) {
+          if (val > 0) tryResolveMouthParam();
+          return;
+        }
+        const core = model.internalModel.coreModel as {
+          setParameterValueByIndex?: (i: number, v: number, w?: number) => void;
+          setParamFloat?: (id: string | number, v: number, w?: number) => void;
+        };
+        if (mouthUseCub2Ref.current) {
+          core.setParamFloat?.(mouthParamIndexRef.current, val);
+        } else {
+          core.setParameterValueByIndex?.(mouthParamIndexRef.current, val, 1);
+        }
+      };
+      const internalModel = model.internalModel as {
+        update: (dt: number, now: number) => void;
+        on?: (event: string, fn: () => void) => void;
+        off?: (event: string, fn: () => void) => void;
+      };
+      const origUpdate = internalModel.update.bind(internalModel);
+      // Scheme A: apply mouth in beforeModelUpdate (after physics/pose, before model.update/loadParam) so physics/breath don't overwrite for this frame
+      if (typeof internalModel.on === 'function') {
+        internalModel.on('beforeModelUpdate', applyMouthFromRef);
+        modelExt._lipSyncApplyMouth = applyMouthFromRef;
+      }
+      internalModel.update = (dt: number, now: number) => {
+        origUpdate(dt, now);
+        applyMouthFromRef();
+      };
+      modelExt._lipSyncOrigUpdate = origUpdate;
+      modelExt._lipSyncInternalModel = internalModel;
+
+      // Optional runtime logging: physics outputs and breathParamIndex (to confirm if mouth is driven by physics/breath)
+      const im = internalModel as Record<string, unknown>;
+      console.debug('[Live2D] lip sync debug', {
+        breathParamIndex: im.breathParamIndex,
+        hasPhysics: !!im.physics,
+        mouthParamIndex: mouthParamIndexRef.current,
+      });
+      const modelWithOn = model as unknown as { on?: (event: string, fn: (p: unknown) => void) => void };
+      if (typeof modelWithOn.on === 'function') {
+        modelWithOn.on('physicsLoaded', (physics: unknown) => {
+          console.debug('[Live2D] physicsLoaded', physics);
+          try {
+            const rig = (physics as Record<string, unknown>)?._physicsRig as { outputs?: unknown[] } | undefined;
+            if (rig?.outputs?.length) console.debug('[Live2D] physics outputs count', rig.outputs.length, '(sample)', rig.outputs[0]);
+          } catch {
+            // ignore
+          }
+        });
+      }
+
       // Start idle animation after delay to ensure model is ready
       setTimeout(() => {
         startIdleAnimation();
@@ -157,8 +267,10 @@ export function useLive2D(modelPath: string) {
     // Play motion
     model.motion(mapping.group, randomIndex);
 
-    // Set expression
-    const expression = emotionExpressionMap[emotion];
+    // Set expression（测试时固定中立表情，便于观察嘴部）
+    const expression = USE_NEUTRAL_EXPRESSION_FOR_TEST
+      ? (emotionExpressionMap.neutral ?? 'normal')
+      : emotionExpressionMap[emotion];
     if (expression) {
       model.expression(expression);
     }
@@ -178,28 +290,71 @@ export function useLive2D(modelPath: string) {
     model.expression(expression);
   }, []);
 
-  // Set lip sync value (0-1)
+  // Set lip sync value (0-1); stores in ref and caches param index. Apply immediately when index known so rAF vs PIXI ticker order doesn't drop frames.
   const setLipSync = useCallback((value: number) => {
     const model = modelRef.current;
     if (!model?.internalModel?.coreModel) return;
 
-    // Set mouth open parameter
-    // Parameter names vary by model, common ones are:
-    // PARAM_MOUTH_OPEN_Y, ParamMouthOpenY, Mouth_Open, etc.
-    const coreModel = model.internalModel.coreModel;
-    const paramNames = ['ParamMouthOpenY', 'PARAM_MOUTH_OPEN_Y', 'Mouth_Open'];
-    
-    for (const paramName of paramNames) {
-      try {
-        const paramIndex = coreModel.getParameterIndex(paramName);
-        if (paramIndex >= 0) {
-          coreModel.setParameterValueByIndex(paramIndex, value);
-          break;
+    const prev = lipSyncPrevRef.current;
+    const smoothed = value === 0 ? 0 : prev * 0.25 + value * 0.75;
+    lipSyncPrevRef.current = smoothed;
+    lipSyncValueRef.current = smoothed;
+
+    const core = model.internalModel.coreModel as {
+      getParameterIndex?: (name: string) => number;
+      getParamIndex?: (name: string) => number;
+      setParameterValueByIndex?: (i: number, v: number, w?: number) => void;
+      setParamFloat?: (id: string | number, v: number, w?: number) => void;
+    };
+    const paramNames = ['PARAM_MOUTH_OPEN_Y', 'ParamMouthOpenY', 'Mouth_Open'];
+
+    if (mouthParamIndexRef.current < 0) {
+      for (const paramName of paramNames) {
+        try {
+          const idx4 = core.getParameterIndex?.(paramName) ?? -1;
+          if (idx4 >= 0) {
+            mouthParamIndexRef.current = idx4;
+            mouthUseCub2Ref.current = false;
+            break;
+          }
+        } catch {
+          //
         }
-      } catch {
-        // Parameter not found, try next
+      }
+      if (mouthParamIndexRef.current < 0) {
+        for (const paramName of paramNames) {
+          try {
+            const idx2 = core.getParamIndex?.(paramName) ?? -1;
+            if (idx2 >= 0) {
+              mouthParamIndexRef.current = idx2;
+              mouthUseCub2Ref.current = true;
+              break;
+            }
+          } catch {
+            //
+          }
+        }
       }
     }
+
+    // Apply immediately so mouth updates even if PIXI ticker runs before our rAF next frame
+    if (mouthParamIndexRef.current >= 0) {
+      if (mouthUseCub2Ref.current) {
+        core.setParamFloat?.(mouthParamIndexRef.current, smoothed);
+      } else {
+        core.setParameterValueByIndex?.(mouthParamIndexRef.current, smoothed, 1);
+      }
+    } else if (smoothed > 0.01) {
+      const now = Date.now();
+      if (now - lipSyncParamNotFoundLogRef.current > 1000) {
+        lipSyncParamNotFoundLogRef.current = now;
+        console.warn('[LipSync] mouth param not found (index -1), value=', smoothed);
+      }
+    }
+
+    // #region agent log
+    if (Math.random() < 0.03) fetch('http://127.0.0.1:7243/ingest/f4c89dae-c5c6-4ddf-83b3-ea85c173d520',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useLive2D.ts:setLipSync',message:'setLipSync cache',data:{value,smoothed,mouthParamIndex:mouthParamIndexRef.current,useCub2:mouthUseCub2Ref.current},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C,D',runId:'post-fix'})}).catch(()=>{});
+    // #endregion
   }, []);
 
   // Start idle animation loop
@@ -256,10 +411,18 @@ export function useLive2D(modelPath: string) {
       stopIdleAnimation();
       const model = modelRef.current;
       if (model) {
-        const modelExt = model as unknown as Record<string, unknown>;
-        const canvas = modelExt._canvasEl as HTMLCanvasElement | undefined;
-        const onMove = modelExt._canvasPointerMove as ((e: MouseEvent) => void) | undefined;
-        const onClick = modelExt._canvasClick as (() => void) | undefined;
+        const ext = model as unknown as Record<string, unknown>;
+        const origUpdate = ext._lipSyncOrigUpdate as ((dt: number, now: number) => void) | undefined;
+        const internalModel = ext._lipSyncInternalModel as { update?: (dt: number, now: number) => void; off?: (event: string, fn: () => void) => void } | undefined;
+        const applyMouth = ext._lipSyncApplyMouth as (() => void) | undefined;
+        if (internalModel && applyMouth && typeof internalModel.off === 'function') internalModel.off('beforeModelUpdate', applyMouth);
+        if (internalModel && origUpdate) internalModel.update = origUpdate;
+      }
+      if (model) {
+        const ext2 = model as unknown as Record<string, unknown>;
+        const canvas = ext2._canvasEl as HTMLCanvasElement | undefined;
+        const onMove = ext2._canvasPointerMove as ((e: MouseEvent) => void) | undefined;
+        const onClick = ext2._canvasClick as (() => void) | undefined;
         if (canvas) {
           if (onMove) canvas.removeEventListener('pointermove', onMove);
           if (onClick) canvas.removeEventListener('click', onClick);
@@ -278,14 +441,18 @@ export function useLive2D(modelPath: string) {
     };
   }, [stopIdleAnimation]);
 
-  const controller: Live2DController = {
-    playEmotion,
-    playMotion,
-    setExpression,
-    setLipSync,
-    startIdleAnimation,
-    stopIdleAnimation,
-  };
+  // Stable ref so Live2DCanvas lip-sync effect doesn't re-run on every parent re-render (avoids canceling rAF loop between sentences)
+  const controller = useMemo<Live2DController>(
+    () => ({
+      playEmotion,
+      playMotion,
+      setExpression,
+      setLipSync,
+      startIdleAnimation,
+      stopIdleAnimation,
+    }),
+    [playEmotion, playMotion, setExpression, setLipSync, startIdleAnimation, stopIdleAnimation]
+  );
 
   return {
     initialize,
