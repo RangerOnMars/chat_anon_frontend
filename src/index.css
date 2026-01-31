@@ -51,20 +51,20 @@ body {
 /* Light mode */
 .light {
   color-scheme: light;
-  color: #1a1a2e;
-  background-color: #f8f9fc;
+  color: #2d2d3a;
+  background-color: #f0eeeb;
 }
 
 .light ::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.05);
+  background: rgba(0, 0, 0, 0.08);
 }
 
 .light ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.22);
 }
 
 .light ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(0, 0, 0, 0.32);
 }
 
 /* Glass effect */
@@ -75,13 +75,112 @@ body {
 }
 
 .light .glass {
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+/* Light mode: override white/transparent utilities for readability */
+.light .bg-white\/5 {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+.light .bg-white\/10 {
+  background-color: rgba(0, 0, 0, 0.08);
+}
+.light .bg-white\/20 {
+  background-color: rgba(0, 0, 0, 0.12);
+}
+.light .text-white\/30 {
+  color: rgba(0, 0, 0, 0.45);
+}
+.light .text-white\/40 {
+  color: rgba(0, 0, 0, 0.5);
+}
+.light .text-white\/50 {
+  color: rgba(0, 0, 0, 0.55);
+}
+.light .text-white\/60 {
+  color: rgba(0, 0, 0, 0.6);
+}
+.light .text-white\/70 {
+  color: rgba(0, 0, 0, 0.7);
+}
+.light .border-white\/10 {
+  border-color: rgba(0, 0, 0, 0.1);
+}
+.light .border-white\/20 {
+  border-color: rgba(0, 0, 0, 0.15);
+}
+.light .placeholder\:text-white\/30::placeholder {
+  color: rgba(0, 0, 0, 0.45);
+}
+.light .hover\:bg-white\/10:hover {
+  background-color: rgba(0, 0, 0, 0.08);
+}
+.light .hover\:text-white:hover {
+  color: #2d2d3a;
+}
+.light .hover\:bg-white\/20:hover {
+  background-color: rgba(0, 0, 0, 0.12);
+}
+
+/* Light mode: brand colors (icons and labels) */
+.light .text-primary-400 {
+  color: #c026d3;
+}
+.light .text-accent-400 {
+  color: #e11d48;
+}
+
+/* Light mode: status/semantic colors 400 → 600 */
+.light .text-green-400 {
+  color: #16a34a;
+}
+.light .text-yellow-400 {
+  color: #ca8a04;
+}
+.light .text-red-400 {
+  color: #dc2626;
+}
+.light .text-blue-400 {
+  color: #2563eb;
+}
+.light .text-purple-400 {
+  color: #9333ea;
+}
+.light .text-gray-400 {
+  color: #4b5563;
+}
+
+/* Light mode: emotion labels 300 → 600 */
+.light .text-yellow-300 {
+  color: #ca8a04;
+}
+.light .text-blue-300 {
+  color: #2563eb;
+}
+.light .text-red-300 {
+  color: #dc2626;
+}
+.light .text-purple-300 {
+  color: #9333ea;
+}
+.light .text-gray-300 {
+  color: #4b5563;
+}
+.light .text-green-300 {
+  color: #16a34a;
 }
 
 /* Gradient text */
 .gradient-text {
   background: linear-gradient(135deg, #d946ef 0%, #f43f5e 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.light .gradient-text {
+  background: linear-gradient(135deg, #c026d3 0%, #e11d48 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
