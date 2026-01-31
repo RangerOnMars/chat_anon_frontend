@@ -171,6 +171,122 @@ body {
   color: #16a34a;
 }
 
+/* Light mode: colored translucent backgrounds 500/20, 500/10 → 600 + lower opacity */
+.light .bg-primary-500\/20 {
+  background-color: rgba(192, 38, 211, 0.14);
+}
+.light .bg-accent-500\/20 {
+  background-color: rgba(225, 29, 72, 0.14);
+}
+.light .bg-red-500\/20 {
+  background-color: rgba(220, 38, 38, 0.14);
+}
+.light .bg-yellow-500\/20 {
+  background-color: rgba(202, 138, 4, 0.14);
+}
+.light .bg-green-500\/20 {
+  background-color: rgba(22, 163, 74, 0.14);
+}
+.light .bg-blue-500\/20 {
+  background-color: rgba(37, 99, 235, 0.14);
+}
+.light .bg-purple-500\/20 {
+  background-color: rgba(147, 51, 234, 0.14);
+}
+.light .bg-gray-500\/20 {
+  background-color: rgba(75, 85, 99, 0.12);
+}
+.light .bg-primary-500\/10 {
+  background-color: rgba(192, 38, 211, 0.08);
+}
+.light .bg-accent-500\/10 {
+  background-color: rgba(225, 29, 72, 0.08);
+}
+.light .bg-blue-500\/10 {
+  background-color: rgba(37, 99, 235, 0.08);
+}
+
+/* Light mode: hover states */
+.light .hover\:bg-primary-500\/30:hover {
+  background-color: rgba(192, 38, 211, 0.2);
+}
+.light .hover\:bg-red-500\/30:hover {
+  background-color: rgba(220, 38, 38, 0.2);
+}
+
+/* Light mode: emotion label borders 500/30 → 600/20 */
+.light .border-yellow-500\/30 {
+  border-color: rgba(202, 138, 4, 0.2);
+}
+.light .border-blue-500\/30 {
+  border-color: rgba(37, 99, 235, 0.2);
+}
+.light .border-red-500\/30 {
+  border-color: rgba(220, 38, 38, 0.2);
+}
+.light .border-purple-500\/30 {
+  border-color: rgba(147, 51, 234, 0.2);
+}
+.light .border-gray-500\/30 {
+  border-color: rgba(75, 85, 99, 0.2);
+}
+.light .border-green-500\/30 {
+  border-color: rgba(22, 163, 74, 0.2);
+}
+
+/* Light mode: small dot/indicator fills 400, 500 → 600 */
+.light .bg-primary-400 {
+  background-color: #c026d3;
+}
+.light .bg-accent-400 {
+  background-color: #e11d48;
+}
+.light .bg-green-400 {
+  background-color: #16a34a;
+}
+.light .bg-green-500 {
+  background-color: #16a34a;
+}
+
+/* Light mode: border blue-500/20 (e.g. StatusIndicator info box) */
+.light .border-blue-500\/20 {
+  border-color: rgba(37, 99, 235, 0.18);
+}
+
+/* Light mode: focus ring and focus border → primary-600 for consistency */
+.light .focus\:ring-primary-500\/50:focus {
+  box-shadow: 0 0 0 2px rgba(192, 38, 211, 0.4);
+}
+.light .focus\:ring-primary-500\/20:focus {
+  box-shadow: 0 0 0 2px rgba(192, 38, 211, 0.18);
+}
+.light .focus\:border-primary-500\/50:focus {
+  border-color: rgba(192, 38, 211, 0.5);
+}
+
+/* Light mode: chat panel readability */
+.light .chat-panel .bg-primary-500\/20 p {
+  color: #2d2d3a;
+}
+.light .chat-panel .flex.flex-col.items-center.justify-center.h-full.text-center.opacity-50 {
+  opacity: 0.65;
+}
+.light .chat-panel .border-b .text-xs.opacity-50 {
+  opacity: 0.65;
+}
+.light .chat-panel .opacity-70 {
+  opacity: 0.85;
+}
+.light .chat-panel .text-xs.opacity-40 {
+  opacity: 0.55;
+}
+.light .chat-panel .opacity-60 {
+  opacity: 0.78;
+}
+.light .chat-panel textarea::placeholder {
+  color: rgba(0, 0, 0, 0.55);
+}
+
 /* Gradient text */
 .gradient-text {
   background: linear-gradient(135deg, #d946ef 0%, #f43f5e 100%);

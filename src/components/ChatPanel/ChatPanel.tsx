@@ -21,7 +21,7 @@ export function ChatPanel() {
   }, [messages, partialTranscription, isThinking]);
 
   return (
-    <div className="flex flex-col h-full glass rounded-2xl overflow-hidden">
+    <div className="chat-panel flex flex-col h-full glass rounded-2xl overflow-hidden">
       {/* Header */}
       <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
         <h2 className="font-semibold flex items-center gap-2">
