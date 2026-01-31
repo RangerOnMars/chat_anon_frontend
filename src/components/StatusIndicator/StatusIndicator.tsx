@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { cn } from '@/utils/cn';
 import { useChatStore } from '@/stores/chatStore';
 import type { PipelineStage } from '@/utils/websocket';
@@ -25,7 +26,7 @@ const stageConfig: Record<
     bgColor: 'bg-blue-500/20',
   },
   llm: {
-    label: 'AI 思考',
+    label: '思考中',
     icon: Brain,
     color: 'text-purple-400',
     bgColor: 'bg-purple-500/20',
@@ -59,9 +60,10 @@ export function StatusIndicator() {
   const isProcessing = pipelineStage !== 'idle' || isThinking || isPlaying;
 
   return (
-    <div className="glass rounded-xl p-4">
-      {/* Pipeline Progress */}
-      <div className="flex items-center justify-between mb-3">
+    <div className="glass rounded-xl px-6 py-4">
+      {/* Pipeline Progress - full bar width, each icon centered in its column */}
+      <div className="w-full mb-3">
+        <div className="flex items-center w-full min-w-0">
         {stages.map((stage, index) => {
           const config = stageConfig[stage];
           const isActive = stage === effectiveStage;
@@ -69,61 +71,71 @@ export function StatusIndicator() {
           const Icon = config.icon;
 
           return (
-            <div key={stage} className="flex items-center">
-              {/* Stage indicator */}
-              <div
-                className={cn(
-                  'flex items-center justify-center w-10 h-10 rounded-full',
-                  'transition-all duration-300',
-                  isActive && config.bgColor,
-                  isActive && config.color,
-                  isCompleted && 'bg-green-500/20 text-green-400',
-                  !isActive && !isCompleted && 'bg-white/5 text-white/30'
-                )}
-              >
-                {isActive ? (
-                  <Loader2 size={20} className="animate-spin" />
-                ) : isCompleted ? (
-                  <Check size={20} />
-                ) : (
-                  <Icon size={20} />
-                )}
+            <Fragment key={stage}>
+              {/* Column: w-16 to match label column so icon/text centerlines align */}
+              <div className="flex flex-shrink-0 w-16 justify-center">
+                <div
+                  className={cn(
+                    'flex items-center justify-center w-12 h-12 rounded-full',
+                    'transition-all duration-300',
+                    isActive && config.bgColor,
+                    isActive && config.color,
+                    isCompleted && 'bg-green-500/20 text-green-400',
+                    !isActive && !isCompleted && 'bg-white/5 text-white/30'
+                  )}
+                >
+                  {isActive ? (
+                    <Loader2 size={24} className="animate-spin" />
+                  ) : isCompleted ? (
+                    <Check size={24} />
+                  ) : (
+                    <Icon size={24} />
+                  )}
+                </div>
               </div>
-
-              {/* Connector line */}
+              {/* Connector: flex-1 so it fills space between icons */}
               {index < stages.length - 1 && (
                 <div
                   className={cn(
-                    'w-8 h-0.5 mx-1',
+                    'flex-1 min-w-6 h-px',
                     'transition-colors duration-300',
-                    isCompleted ? 'bg-green-400' : 'bg-white/10'
+                    isCompleted ? 'bg-green-400' : 'bg-white/20'
                   )}
                 />
               )}
-            </div>
+            </Fragment>
           );
         })}
+        </div>
       </div>
 
-      {/* Stage Labels */}
-      <div className="flex items-center justify-between text-xs">
-        {stages.map((stage) => {
+      {/* Stage Labels - full bar width, each label centered under icon */}
+      <div className="w-full text-sm">
+        <div className="flex items-center w-full min-w-0">
+        {stages.map((stage, index) => {
           const config = stageConfig[stage];
           const isActive = stage === effectiveStage;
 
           return (
-            <div
-              key={stage}
-              className={cn(
-                'text-center w-10',
-                'transition-colors duration-300',
-                isActive ? config.color : 'text-white/30'
+            <Fragment key={stage}>
+              <div
+                className={cn(
+                  'flex flex-shrink-0 w-16 justify-center',
+                  'transition-colors duration-300',
+                  isActive ? config.color : 'text-white/30'
+                )}
+              >
+                <span className="text-center whitespace-nowrap">
+                  {config.label}
+                </span>
+              </div>
+              {index < stages.length - 1 && (
+                <span className="flex-1 min-w-6" aria-hidden />
               )}
-            >
-              {config.label}
-            </div>
+            </Fragment>
           );
         })}
+        </div>
       </div>
 
       {/* Current Status */}
