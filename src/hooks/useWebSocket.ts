@@ -149,7 +149,7 @@ export function useWebSocket() {
         case 'audio_stream_started':
           break;
 
-        case 'agent_listening':
+        case 'voice_call_listening':
           setPipelineStage('idle');
           setIsThinking(false);
           break;
@@ -300,36 +300,20 @@ export function useWebSocket() {
     });
   }, [sendMessage]);
 
-  // Streaming audio
-  const startAudioStream = useCallback(() => {
-    sendMessage({ type: 'audio_stream_start' });
+  // Voice call (voice_call_* protocol)
+  const startVoiceCall = useCallback(() => {
+    sendMessage({ type: 'voice_call_start' });
   }, [sendMessage]);
 
-  const sendAudioStreamChunk = useCallback((audioBase64: string) => {
+  const sendVoiceCallChunk = useCallback((audioBase64: string) => {
     sendMessage({
-      type: 'audio_stream_chunk',
+      type: 'voice_call_audio_chunk',
       audio_base64: audioBase64,
     });
   }, [sendMessage]);
 
-  const endAudioStream = useCallback(() => {
-    sendMessage({ type: 'audio_stream_end' });
-  }, [sendMessage]);
-
-  // Agent mode
-  const startAgentMode = useCallback(() => {
-    sendMessage({ type: 'agent_mode_start' });
-  }, [sendMessage]);
-
-  const sendAgentAudioChunk = useCallback((audioBase64: string) => {
-    sendMessage({
-      type: 'agent_audio_chunk',
-      audio_base64: audioBase64,
-    });
-  }, [sendMessage]);
-
-  const stopAgentMode = useCallback(() => {
-    sendMessage({ type: 'agent_mode_stop' });
+  const stopVoiceCall = useCallback(() => {
+    sendMessage({ type: 'voice_call_stop' });
   }, [sendMessage]);
 
   // Switch character
@@ -362,12 +346,9 @@ export function useWebSocket() {
     disconnect,
     sendTextMessage,
     sendAudioMessage,
-    startAudioStream,
-    sendAudioStreamChunk,
-    endAudioStream,
-    startAgentMode,
-    sendAgentAudioChunk,
-    stopAgentMode,
+    startVoiceCall,
+    sendVoiceCallChunk,
+    stopVoiceCall,
     switchCharacter,
     clearHistory,
     fetchCharacters,

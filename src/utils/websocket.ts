@@ -31,17 +31,17 @@ export interface AudioStreamEndMessage {
   type: 'audio_stream_end';
 }
 
-export interface AgentModeStartMessage {
-  type: 'agent_mode_start';
+export interface VoiceCallStartMessage {
+  type: 'voice_call_start';
 }
 
-export interface AgentAudioChunkMessage {
-  type: 'agent_audio_chunk';
+export interface VoiceCallAudioChunkMessage {
+  type: 'voice_call_audio_chunk';
   audio_base64: string;
 }
 
-export interface AgentModeStopMessage {
-  type: 'agent_mode_stop';
+export interface VoiceCallStopMessage {
+  type: 'voice_call_stop';
 }
 
 export interface SwitchCharacterMessage {
@@ -64,9 +64,9 @@ export type ClientMessage =
   | AudioStreamStartMessage
   | AudioStreamChunkMessage
   | AudioStreamEndMessage
-  | AgentModeStartMessage
-  | AgentAudioChunkMessage
-  | AgentModeStopMessage
+  | VoiceCallStartMessage
+  | VoiceCallAudioChunkMessage
+  | VoiceCallStopMessage
   | SwitchCharacterMessage
   | ClearHistoryMessage
   | PingMessage;
@@ -151,9 +151,9 @@ export interface AudioStreamStartedMessage {
   message: string;
 }
 
-export interface AgentListeningMessage {
-  type: 'agent_listening';
-  message: string;
+export interface VoiceCallListeningMessage {
+  type: 'voice_call_listening';
+  message?: string;
 }
 
 export interface CharacterSwitchedMessage {
@@ -192,7 +192,7 @@ export type ServerMessage =
   | ResponseMessage
   | TurnEndMessage
   | AudioStreamStartedMessage
-  | AgentListeningMessage
+  | VoiceCallListeningMessage
   | CharacterSwitchedMessage
   | HistoryClearedMessage
   | PongMessage

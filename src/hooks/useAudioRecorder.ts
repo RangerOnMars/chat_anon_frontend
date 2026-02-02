@@ -15,6 +15,11 @@ export interface AudioRecorderOptions {
   chunkIntervalMs?: number;
 }
 
+/** Optional overrides when starting recording (e.g. pass onChunk at call time to avoid React state timing). */
+export interface StartRecordingOverrides {
+  onChunk?: (base64Data: string) => void;
+}
+
 export function useAudioRecorder(options: AudioRecorderOptions = {}) {
   const { onChunk, onVolumeChange, chunkIntervalMs = 100 } = options;
   
@@ -34,8 +39,9 @@ export function useAudioRecorder(options: AudioRecorderOptions = {}) {
   const chunkIntervalRef = useRef<number | null>(null);
   const accumulatedSamplesRef = useRef<Float32Array[]>([]);
 
-  // Start recording
-  const startRecording = useCallback(async () => {
+  // Start recording. Pass overrides.onChunk at call time for voice call so the callback is used immediately (avoids React state timing).
+  const startRecording = useCallback(async (overrides?: StartRecordingOverrides) => {
+    const chunkCallback = overrides?.onChunk ?? onChunk;
     try {
       // Check browser support
       if (!navigator.mediaDevices?.getUserMedia) {
@@ -109,8 +115,8 @@ export function useAudioRecorder(options: AudioRecorderOptions = {}) {
       source.connect(processor);
       processor.connect(audioContext.destination);
 
-      // Start chunk sending interval (for streaming modes)
-      if (onChunk) {
+      // Start chunk sending interval (for streaming modes); use callback from overrides or options
+      if (chunkCallback) {
         chunkIntervalRef.current = window.setInterval(() => {
           if (accumulatedSamplesRef.current.length > 0) {
             // Merge accumulated samples
@@ -128,7 +134,7 @@ export function useAudioRecorder(options: AudioRecorderOptions = {}) {
             // Convert and send
             const int16Data = float32ToInt16(merged);
             const base64Data = int16ToBase64(int16Data);
-            onChunk(base64Data);
+            chunkCallback(base64Data);
 
             // Clear accumulated samples
             accumulatedSamplesRef.current = [];

@@ -12,7 +12,7 @@ export interface ChatMessage {
 }
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
-export type VoiceMode = 'idle' | 'push-to-talk' | 'streaming' | 'agent';
+export type VoiceMode = 'idle' | 'push-to-talk' | 'voice_call';
 
 interface ChatState {
   // Connection
