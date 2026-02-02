@@ -1,5 +1,5 @@
 import { useCallback, useRef, useEffect, useState, useMemo } from 'react';
-import * as PIXI from 'pixi.js';
+import * as PIXI from 'pixi.js-legacy';
 import { Live2DModel } from 'pixi-live2d-display';
 
 // Register Live2D with PIXI
@@ -80,18 +80,22 @@ export function useLive2D(modelPath: string) {
     try {
       // Yield to browser to allow loading animation to render
       await new Promise(resolve => requestAnimationFrame(resolve));
-      
+
       // Create PIXI application (PIXI v7 API - options in constructor)
-      // Cap resolution at 2 to avoid OOM on high-DPI screens (3x/4x can use 2–4GB+)
+      // When WebGL is unavailable (e.g. context limit, no stencil), force Canvas renderer (pixi.js-legacy fallback).
+      const useCanvasFallback = typeof PIXI?.utils?.isWebGLSupported === 'function' && !PIXI.utils.isWebGLSupported();
       const resolution = Math.min(window.devicePixelRatio || 1, 2);
-      const app = new PIXI.Application({
+      const appOptions = {
         view: document.createElement('canvas'),
         resizeTo: container,
         backgroundAlpha: 0,
         antialias: false, // Disable to reduce GPU memory
         resolution,
         autoDensity: true,
-      });
+        ...(useCanvasFallback && { forceCanvas: true as const }),
+      };
+
+      const app = new PIXI.Application(appOptions);
 
       container.appendChild(app.view as HTMLCanvasElement);
       appRef.current = app;
