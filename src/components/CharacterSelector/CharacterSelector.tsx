@@ -40,7 +40,9 @@ export function CharacterSelector() {
           isDisabled && 'opacity-50 cursor-not-allowed'
         )}
       >
-        {currentCharacter ? (
+        {connectionStatus !== 'connected' ? (
+          <span className="text-sm text-white/50">未连接</span>
+        ) : currentCharacter ? (
           <>
             <span className="text-sm font-medium">
               {currentCharacter.display_name || currentCharacter.name}

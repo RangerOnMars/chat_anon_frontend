@@ -10,10 +10,12 @@ const WS_URL = 'ws://localhost:8765/ws';
 const API_URL = 'http://localhost:8765';
 const PING_INTERVAL = 30000; // 30 seconds
 const RECONNECT_DELAY = 3000; // 3 seconds
+const CONNECT_TIMEOUT_MS = 15000; // 15 seconds - avoid stuck "连接中..."
 
 export function useWebSocket() {
   const pingIntervalRef = useRef<number | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
+  const connectTimeoutRef = useRef<number | null>(null);
   
   // Use selectors to only subscribe to specific state values we need for rendering
   // Actions (setters) are always stable and don't cause re-renders
@@ -212,7 +214,25 @@ export function useWebSocket() {
     const newWs = new WebSocket(WS_URL);
     setWs(newWs);
 
+    const clearConnectTimeout = () => {
+      if (connectTimeoutRef.current !== null) {
+        clearTimeout(connectTimeoutRef.current);
+        connectTimeoutRef.current = null;
+      }
+    };
+
+    connectTimeoutRef.current = window.setTimeout(() => {
+      connectTimeoutRef.current = null;
+      if (newWs.readyState === WebSocket.CONNECTING) {
+        newWs.close();
+        setConnectionStatus('error');
+        setErrorMessage('连接超时，请检查服务器是否已启动');
+        setWs(null);
+      }
+    }, CONNECT_TIMEOUT_MS);
+
     newWs.onopen = () => {
+      clearConnectTimeout();
       newWs.send(JSON.stringify({
         type: 'connect',
         api_token: currentToken,
@@ -231,11 +251,13 @@ export function useWebSocket() {
     newWs.onmessage = handleMessage;
 
     newWs.onerror = () => {
+      clearConnectTimeout();
       setConnectionStatus('error');
       setErrorMessage('连接错误');
     };
 
     newWs.onclose = () => {
+      clearConnectTimeout();
       setConnectionStatus('disconnected');
       setWs(null);
 
@@ -256,6 +278,10 @@ export function useWebSocket() {
 
   // Disconnect from WebSocket
   const disconnect = useCallback(() => {
+    if (connectTimeoutRef.current !== null) {
+      clearTimeout(connectTimeoutRef.current);
+      connectTimeoutRef.current = null;
+    }
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
@@ -332,6 +358,9 @@ export function useWebSocket() {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      if (connectTimeoutRef.current !== null) {
+        clearTimeout(connectTimeoutRef.current);
+      }
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
