@@ -30,3 +30,6 @@ public/live2d/
 .env
 .env.local
 .env.*.local
+
+# Local HTTPS certificates (use cert/key.pem, cert/cert.pem or env SSL_KEY_PATH, SSL_CERT_PATH)
+cert/

@@ -5,9 +5,7 @@ import type {
   ServerMessage,
   CharactersResponse,
 } from '@/utils/websocket';
-
-const WS_URL = 'ws://localhost:8765/ws';
-const API_URL = 'http://localhost:8765';
+import { getApiBase, getWsEndpoint } from '@/config/api';
 const PING_INTERVAL = 30000; // 30 seconds
 const RECONNECT_DELAY = 3000; // 3 seconds
 const CONNECT_TIMEOUT_MS = 15000; // 15 seconds - avoid stuck "连接中..."
@@ -34,7 +32,7 @@ export function useWebSocket() {
   // Fetch available characters
   const fetchCharacters = useCallback(async () => {
     try {
-      const response = await fetch(`${API_URL}/characters`);
+      const response = await fetch(`${getApiBase()}/characters`);
       if (response.ok) {
         const data: CharactersResponse = await response.json();
         setCharacters(data.characters);
@@ -211,7 +209,7 @@ export function useWebSocket() {
     setConnectionStatus('connecting');
     setErrorMessage(null);
 
-    const newWs = new WebSocket(WS_URL);
+    const newWs = new WebSocket(getWsEndpoint());
     setWs(newWs);
 
     const clearConnectTimeout = () => {

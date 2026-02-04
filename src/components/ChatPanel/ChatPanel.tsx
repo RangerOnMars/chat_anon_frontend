@@ -41,7 +41,7 @@ export function ChatPanel() {
             <p className="text-lg font-medium">开始对话吧！</p>
             <p className="text-sm mt-1">
               {connectionStatus === 'connected'
-                ? '输入消息或使用语音与爱音聊天'
+                ? '输入消息或使用语音来聊天'
                 : '请先连接服务器'}
             </p>
           </div>

@@ -13,6 +13,7 @@ import {
   X,
   Loader2,
 } from 'lucide-react';
+import { getWsEndpoint } from '@/config/api';
 
 export function Header() {
   const [showSettings, setShowSettings] = useState(false);
@@ -203,7 +204,7 @@ export function Header() {
                   服务器地址
                 </label>
                 <div className="px-4 py-3 rounded-lg bg-white/5 text-white/50 text-sm">
-                  ws://localhost:8765/ws
+                  {getWsEndpoint()}
                 </div>
               </div>
             </div>
