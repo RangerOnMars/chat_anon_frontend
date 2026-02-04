@@ -63,6 +63,8 @@ npm run dev
 
 访问 http://localhost:3000
 
+**HTTPS 开发**：若需使用证书启动 HTTPS，可运行 `./dev-https.sh`（首次使用请执行 `chmod +x dev-https.sh`）。修改脚本顶部的 `CERT_DIR` 可更换证书目录（默认 `/etc/letsencrypt/live/anontokyo.ltd`）。
+
 ### 4. 连接后端
 
 1. 确保后端服务运行在 `ws://localhost:8765/ws`
