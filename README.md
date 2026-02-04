@@ -36,24 +36,32 @@ npm install
 
 ```bash
 # Windows
-xcopy /E /I "D:\coding_ws\D_sakiko\live2d_related\anon\live2D_model" "public\live2d\live2D_model"
+xcopy /E /I "D:\coding_ws\D_sakiko\live2d_related\anon\live2D_model" "public\live2d\anon\live2D_model"
 
 # 或者创建符号链接 (需要管理员权限)
-mklink /D "public\live2d\live2D_model" "D:\coding_ws\D_sakiko\live2d_related\anon\live2D_model"
+mklink /D "public\live2d\anon\live2D_model" "D:\coding_ws\D_sakiko\live2d_related\anon\live2D_model"
 ```
 
 目录结构应该是：
 ```
 public/
 └── live2d/
-    └── live2D_model/
-        ├── 3.model.json
-        ├── anon_casual-2023.moc
-        ├── anon_casual-2023.physics.json
-        ├── texture_00.png
-        ├── texture_01.png
-        └── ... (其他动作和表情文件)
+    ├── anon/                  # anon 模型（默认）
+    │   └── live2D_model/
+    │       ├── 3.model.json
+    │       └── ...
+    └── mutsumi/               # 可选：mutsumi 模型
+        └── live2D_model/
+            ├── 3.model.json
+            └── ...
 ```
+
+- **角色切换**：切换至 anon 时加载 `public/live2d/anon/live2D_model/3.model.json`；切换至 mutsumi 时尝试加载 `public/live2d/mutsumi/live2D_model/3.model.json`，若不存在则回退使用 anon 模型。
+- **临时使用 anon 作为 mutsumi**：可将 anon 的 `live2D_model` 拷贝一份到 `public/live2d/mutsumi/`，例如（Windows）：
+  ```bash
+  xcopy /E /I "public\live2d\anon\live2D_model" "public\live2d\mutsumi\live2D_model"
+  ```
+- **从旧目录迁移**：若此前已将 anon 模型放在 `public/live2d/live2D_model/`，请将整个目录移动或复制到 `public/live2d/anon/live2D_model/`，否则前端将 404。
 
 ### 3. 启动开发服务器
 

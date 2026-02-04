@@ -56,7 +56,7 @@ export interface Live2DController {
   stopIdleAnimation: () => void;
 }
 
-export function useLive2D(modelPath: string) {
+export function useLive2D(primaryPath: string, fallbackPath?: string | null) {
   const appRef = useRef<PIXI.Application | null>(null);
   const modelRef = useRef<Live2DModel | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -70,6 +70,50 @@ export function useLive2D(modelPath: string) {
   const lipSyncParamNotFoundLogRef = useRef<number>(0);
   const [isLoaded, setIsLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const primaryPathRef = useRef<string>(primaryPath);
+
+  // Teardown: destroy model and app, remove canvas from container, clear refs and loading state
+  const teardown = useCallback(() => {
+    if (idleIntervalRef.current) {
+      clearInterval(idleIntervalRef.current);
+      idleIntervalRef.current = null;
+    }
+    const model = modelRef.current;
+    if (model) {
+      const ext = model as unknown as Record<string, unknown>;
+      const origUpdate = ext._lipSyncOrigUpdate as ((dt: number, now: number) => void) | undefined;
+      const internalModel = ext._lipSyncInternalModel as { update?: (dt: number, now: number) => void; off?: (event: string, fn: () => void) => void } | undefined;
+      const applyMouth = ext._lipSyncApplyMouth as (() => void) | undefined;
+      if (internalModel && applyMouth && typeof internalModel.off === 'function') internalModel.off('beforeModelUpdate', applyMouth);
+      if (internalModel && origUpdate) internalModel.update = origUpdate;
+    }
+    if (model) {
+      const ext2 = model as unknown as Record<string, unknown>;
+      const canvas = ext2._canvasEl as HTMLCanvasElement | undefined;
+      const onMove = ext2._canvasPointerMove as ((e: MouseEvent) => void) | undefined;
+      const onClick = ext2._canvasClick as (() => void) | undefined;
+      if (canvas) {
+        if (onMove) canvas.removeEventListener('pointermove', onMove);
+        if (onClick) canvas.removeEventListener('click', onClick);
+      }
+      try {
+        if (typeof model.destroy === 'function') model.destroy({ children: true, texture: true });
+      } catch (_) {
+        // Ignore destroy errors
+      }
+      modelRef.current = null;
+    }
+    const app = appRef.current;
+    if (app) {
+      const view = app.view as HTMLCanvasElement;
+      if (view?.parentNode) view.parentNode.removeChild(view);
+      app.destroy(true, { children: true, texture: true });
+      appRef.current = null;
+    }
+    mouthParamIndexRef.current = -1;
+    setIsLoaded(false);
+    setLoadError(null);
+  }, []);
 
   // Initialize PIXI app and load model
   const initialize = useCallback(async (container: HTMLDivElement) => {
@@ -103,11 +147,27 @@ export function useLive2D(modelPath: string) {
       // Yield again before loading the model
       await new Promise(resolve => requestAnimationFrame(resolve));
 
-      // Load Live2D model
-      const model = await Live2DModel.from(modelPath, {
-        autoInteract: false,
-        autoUpdate: true,
-      });
+      // Load Live2D model: try primary path, then fallback if provided and different
+      let model: Live2DModel;
+      try {
+        model = await Live2DModel.from(primaryPath, {
+          autoInteract: false,
+          autoUpdate: true,
+        });
+      } catch (primaryError) {
+        if (fallbackPath && primaryPath !== fallbackPath) {
+          try {
+            model = await Live2DModel.from(fallbackPath, {
+              autoInteract: false,
+              autoUpdate: true,
+            });
+          } catch (fallbackError) {
+            throw primaryError;
+          }
+        } else {
+          throw primaryError;
+        }
+      }
 
       modelRef.current = model;
 
@@ -258,7 +318,7 @@ export function useLive2D(modelPath: string) {
       setLoadError(error instanceof Error ? error.message : 'Failed to load model');
       setIsLoaded(false);
     }
-  }, [modelPath]);
+  }, [primaryPath, fallbackPath]);
 
   // Play emotion animation
   const playEmotion = useCallback((emotion: string) => {
@@ -385,6 +445,14 @@ export function useLive2D(modelPath: string) {
     }
   }, []);
 
+  // When primaryPath changes, teardown so next initialize() loads the new path
+  useEffect(() => {
+    if (primaryPathRef.current !== primaryPath && appRef.current) {
+      teardown();
+    }
+    primaryPathRef.current = primaryPath;
+  }, [primaryPath, teardown]);
+
   // Handle window resize
   useEffect(() => {
     const handleResize = () => {
@@ -409,41 +477,10 @@ export function useLive2D(modelPath: string) {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Cleanup: destroy model first to release Live2D textures, then PIXI app
+  // Cleanup on unmount: use same teardown (also removes canvas from container)
   useEffect(() => {
-    return () => {
-      stopIdleAnimation();
-      const model = modelRef.current;
-      if (model) {
-        const ext = model as unknown as Record<string, unknown>;
-        const origUpdate = ext._lipSyncOrigUpdate as ((dt: number, now: number) => void) | undefined;
-        const internalModel = ext._lipSyncInternalModel as { update?: (dt: number, now: number) => void; off?: (event: string, fn: () => void) => void } | undefined;
-        const applyMouth = ext._lipSyncApplyMouth as (() => void) | undefined;
-        if (internalModel && applyMouth && typeof internalModel.off === 'function') internalModel.off('beforeModelUpdate', applyMouth);
-        if (internalModel && origUpdate) internalModel.update = origUpdate;
-      }
-      if (model) {
-        const ext2 = model as unknown as Record<string, unknown>;
-        const canvas = ext2._canvasEl as HTMLCanvasElement | undefined;
-        const onMove = ext2._canvasPointerMove as ((e: MouseEvent) => void) | undefined;
-        const onClick = ext2._canvasClick as (() => void) | undefined;
-        if (canvas) {
-          if (onMove) canvas.removeEventListener('pointermove', onMove);
-          if (onClick) canvas.removeEventListener('click', onClick);
-        }
-        try {
-          if (typeof model.destroy === 'function') model.destroy({ children: true, texture: true });
-        } catch (_) {
-          // Ignore destroy errors
-        }
-        modelRef.current = null;
-      }
-      if (appRef.current) {
-        appRef.current.destroy(true, { children: true, texture: true });
-        appRef.current = null;
-      }
-    };
-  }, [stopIdleAnimation]);
+    return () => teardown();
+  }, [teardown]);
 
   // Stable ref so Live2DCanvas lip-sync effect doesn't re-run on every parent re-render (avoids canceling rAF loop between sentences)
   const controller = useMemo<Live2DController>(

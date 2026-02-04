@@ -4,8 +4,20 @@ import { useChatStore } from '@/stores/chatStore';
 import { cn } from '@/utils/cn';
 import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 
-// Model path - adjust if needed
-const MODEL_PATH = '/live2d/live2D_model/3.model.json';
+/** Anon model path (README: public/live2d/anon/live2D_model/). */
+const ANON_MODEL_PATH = '/live2d/anon/live2D_model/3.model.json';
+
+/** Resolve Live2D paths by character: primary path and optional fallback when primary is missing. */
+function getLive2DPaths(characterName: string | undefined): { primary: string; fallback: string | null } {
+  const name = (characterName ?? 'anon').toLowerCase();
+  if (name === 'anon') {
+    return { primary: ANON_MODEL_PATH, fallback: null };
+  }
+  return {
+    primary: `/live2d/${name}/live2D_model/3.model.json`,
+    fallback: ANON_MODEL_PATH,
+  };
+}
 
 /** Scale RMS to mouth opening; higher = wider mouth. Increased so movement is clearly visible. */
 const LIP_SYNC_SCALE = 1.4;
@@ -14,18 +26,20 @@ const LIP_SYNC_POWER = 0.6;
 
 export function Live2DCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { initialize, isLoaded, loadError, controller } = useLive2D(MODEL_PATH);
+  const currentCharacter = useChatStore((state) => state.currentCharacter);
+  const { primary, fallback } = getLive2DPaths(currentCharacter?.name);
+  const { initialize, isLoaded, loadError, controller } = useLive2D(primary, fallback);
   // Use selectors to avoid subscribing to entire store
   const messages = useChatStore((state) => state.messages);
   const isPlaying = useChatStore((state) => state.isPlaying);
   const lastEmotionRef = useRef<string>('idle');
 
-  // Initialize on mount
+  // Initialize on mount and when primary path changes (character switch); useLive2D teardown runs first on path change
   useEffect(() => {
     if (containerRef.current) {
       initialize(containerRef.current);
     }
-  }, [initialize]);
+  }, [initialize, primary]);
 
   // Play emotion when new assistant message arrives
   useEffect(() => {
