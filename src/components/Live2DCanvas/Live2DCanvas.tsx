@@ -15,12 +15,20 @@ const DEFAULT_MODEL_SET: Record<string, string> = {
 
 const ANON_FALLBACK_MODEL_SET = DEFAULT_MODEL_SET.anon;
 
+/** Map display/backend character name to Live2D folder name (public/live2d/{folder}/). */
+const CHARACTER_FOLDER_MAP: Record<string, string> = {
+  mutsumi: 'mutsumi',
+  anon: 'anon',
+  若叶睦: 'mutsumi',
+};
+
 /** Resolve Live2D paths by character: primary path and optional fallback when primary is missing. */
 function getLive2DPaths(
   characterName: string | undefined,
   live2dModelSet?: string | null
 ): { primary: string; fallback: string | null } {
-  const name = (characterName ?? 'anon').toLowerCase();
+  const raw = (characterName ?? 'anon').trim();
+  const name = CHARACTER_FOLDER_MAP[raw] ?? raw.toLowerCase();
   const modelSet =
     live2dModelSet ?? DEFAULT_MODEL_SET[name] ?? ANON_FALLBACK_MODEL_SET;
   const primary = `${LIVE2D_BASE}/${name}/${modelSet}/model.json`;
@@ -47,12 +55,13 @@ export function Live2DCanvas() {
   const isPlaying = useChatStore((state) => state.isPlaying);
   const lastEmotionRef = useRef<string>('idle');
 
-  // Initialize on mount and when primary path changes (character switch); useLive2D teardown runs first on path change
+  // Initialize on mount and when primary path changes (character switch). key={primary} on container forces DOM remount so PIXI gets a fresh container.
   useEffect(() => {
     if (containerRef.current) {
+      console.log('[Live2D] Canvas init effect: primary=', primary, 'character=', currentCharacter?.name);
       initialize(containerRef.current);
     }
-  }, [initialize, primary]);
+  }, [initialize, primary, currentCharacter?.name]);
 
   // Play emotion when new assistant message arrives
   useEffect(() => {
@@ -111,8 +120,9 @@ export function Live2DCanvas() {
 
   return (
     <div className="relative w-full h-full glass rounded-2xl overflow-hidden">
-      {/* Live2D Container */}
+      {/* Live2D Container: key forces remount on model switch so PIXI/Live2D reloads cleanly */}
       <div
+        key={primary}
         ref={containerRef}
         className="absolute inset-0"
         style={{ touchAction: 'none' }}

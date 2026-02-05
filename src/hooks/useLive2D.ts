@@ -77,12 +77,41 @@ export function useLive2D(primaryPath: string, fallbackPath?: string | null) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const primaryPathRef = useRef<string>(primaryPath);
+  /** Base path of the currently loaded model (e.g. /live2d/anon/casual-2023); used in teardown to clear PIXI texture cache. */
+  const modelBasePathRef = useRef<string>('');
 
-  // Teardown: destroy model and app, remove canvas from container, clear refs and loading state
+  // Teardown: destroy model and app, remove canvas from container, clear refs and loading state (force full PIXI reload on model switch)
   const teardown = useCallback(() => {
+    const modelBasePath = modelBasePathRef.current;
+    console.log('[Live2D] teardown start, modelBasePath=', modelBasePath);
     if (idleIntervalRef.current) {
       clearInterval(idleIntervalRef.current);
       idleIntervalRef.current = null;
+    }
+    // Clear container so next init gets empty DOM (avoids stale canvas when key remounts)
+    const container = containerRef.current;
+    if (container) {
+      container.innerHTML = '';
+      containerRef.current = null;
+    }
+    // Clear PIXI global texture cache for this model so next load does not hit "already had an entry" and displays the new model
+    const cache = (PIXI as unknown as { BaseTextureCache?: Record<string, { destroy?: () => void }> }).BaseTextureCache;
+    if (cache && modelBasePath) {
+      const ids = Object.keys(cache).filter((id) => id.startsWith(modelBasePath));
+      for (const id of ids) {
+        const bt = cache[id];
+        if (bt && typeof bt.destroy === 'function') bt.destroy();
+      }
+      if (ids.length) console.log('[Live2D] cleared BaseTextureCache entries:', ids.length);
+    }
+    const textureCache = (PIXI as unknown as { TextureCache?: Record<string, { destroy?: () => void }> }).TextureCache;
+    if (textureCache && modelBasePath) {
+      const texIds = Object.keys(textureCache).filter((id) => id.startsWith(modelBasePath));
+      for (const id of texIds) {
+        const t = textureCache[id];
+        if (t && typeof t.destroy === 'function') t.destroy();
+      }
+      if (texIds.length) console.log('[Live2D] cleared TextureCache entries:', texIds.length);
     }
     const model = modelRef.current;
     if (model) {
@@ -117,14 +146,19 @@ export function useLive2D(primaryPath: string, fallbackPath?: string | null) {
       appRef.current = null;
     }
     mouthParamIndexRef.current = -1;
+    modelBasePathRef.current = '';
     setIsLoaded(false);
     setLoadError(null);
+    console.log('[Live2D] teardown done');
   }, []);
 
   // Initialize PIXI app and load model
   const initialize = useCallback(async (container: HTMLDivElement) => {
-    if (appRef.current) return;
-
+    if (appRef.current) {
+      console.log('[Live2D] initialize skipped (app already exists), primaryPath=', primaryPath);
+      return;
+    }
+    console.log('[Live2D] initialize start, primaryPath=', primaryPath, 'fallbackPath=', fallbackPath ?? null);
     containerRef.current = container;
 
     try {
@@ -176,6 +210,8 @@ export function useLive2D(primaryPath: string, fallbackPath?: string | null) {
       }
 
       modelRef.current = model;
+      modelBasePathRef.current = primaryPath.replace(/\/model\.json$/i, '');
+      console.log('[Live2D] model loaded, primaryPath=', primaryPath);
 
       // Scale and position model
       const scaleX = container.clientWidth / model.width;
@@ -446,12 +482,15 @@ export function useLive2D(primaryPath: string, fallbackPath?: string | null) {
     }
   }, []);
 
-  // When primaryPath changes, teardown so next initialize() loads the new path
+  // When primaryPath changes, teardown so next initialize() loads the new path (force PIXI reload)
   useEffect(() => {
-    if (primaryPathRef.current !== primaryPath && appRef.current) {
-      teardown();
+    if (primaryPathRef.current !== primaryPath) {
+      if (appRef.current) {
+        console.log('[Live2D] primaryPath changed, tearing down. old=', primaryPathRef.current, 'new=', primaryPath);
+        teardown();
+      }
+      primaryPathRef.current = primaryPath;
     }
-    primaryPathRef.current = primaryPath;
   }, [primaryPath, teardown]);
 
   // Handle window resize
@@ -477,6 +516,11 @@ export function useLive2D(primaryPath: string, fallbackPath?: string | null) {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // When primary path changes (e.g. character switch), teardown first so the next initialize() can load the new model (otherwise initialize returns early when appRef.current exists).
+  useEffect(() => {
+    return () => teardown();
+  }, [primaryPath, teardown]);
 
   // Cleanup on unmount: use same teardown (also removes canvas from container)
   useEffect(() => {
