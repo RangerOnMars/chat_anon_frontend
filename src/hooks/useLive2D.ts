@@ -420,10 +420,6 @@ export function useLive2D(primaryPath: string, fallbackPath?: string | null) {
         console.warn('[LipSync] mouth param not found (index -1), value=', smoothed);
       }
     }
-
-    // #region agent log
-    if (Math.random() < 0.03) fetch('http://127.0.0.1:7243/ingest/f4c89dae-c5c6-4ddf-83b3-ea85c173d520',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useLive2D.ts:setLipSync',message:'setLipSync cache',data:{value,smoothed,mouthParamIndex:mouthParamIndexRef.current,useCub2:mouthUseCub2Ref.current},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C,D',runId:'post-fix'})}).catch(()=>{});
-    // #endregion
   }, []);
 
   // Start idle animation loop (live2d: idle01 group, index 0)

@@ -85,14 +85,6 @@ export function useAudioPlayer(
       // Write to shared ref every frame so lip sync reads latest without depending on React re-renders
       useChatStore.getState().volumeLevelRef.current = volume;
 
-      // #region agent log
-      if (Math.random() < 0.02) fetch('http://127.0.0.1:7243/ingest/f4c89dae-c5c6-4ddf-83b3-ea85c173d520',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useAudioPlayer.ts:updateVolume',message:'RMS/volume',data:{rms,volume},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
-      if (typeof (window as unknown as { __lipSyncFrame?: number }).__lipSyncFrame === 'undefined') (window as unknown as { __lipSyncFrame: number }).__lipSyncFrame = 0;
-      const w = window as unknown as { __lipSyncFrame: number };
-      w.__lipSyncFrame++;
-      if (w.__lipSyncFrame % 60 === 0) console.debug('[LipSync] player', { frame: w.__lipSyncFrame, rms, volume });
-      // #endregion
-
       setVolumeLevel(volume);
       onVolumeChange?.(volume);
 
