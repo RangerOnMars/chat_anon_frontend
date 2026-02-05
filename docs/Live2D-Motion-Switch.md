@@ -14,7 +14,7 @@
 | **触发入口** | 助手消息到达、画布点击、空闲定时循环 |
 | **底层调用** | `pixi-live2d-display` 的 `model.motion(group, index)`、`model.expression(name)` |
 
-当前模型使用的动作组主要为 **`rana`**（情绪动作）和 **`idle`**（待机动作）。
+当前使用的 **live2d** 模型在 `model.json` 的 `motions` 中以**名称**为 key（如 `smile01`、`angry01`、`idle01`），每组通常只有一个动作，因此统一使用 `model.motion(groupName, 0)` 播放。
 
 ---
 
@@ -22,24 +22,23 @@
 
 文件：`src/hooks/useLive2D.ts`
 
-情绪字符串到「动作组 + 动作索引列表」的映射：
+情绪到「动作组名列表」的映射（每组名对应 model.json 中 motions 的一个 key，索引固定为 0）：
 
 ```ts
-const emotionMotionMap: Record<string, { group: string; indices: number[] }> = {
-  happy:    { group: 'rana', indices: [0, 1, 2, 3] },   // 微笑类
-  sad:      { group: 'rana', indices: [4, 5] },         // 悲伤
-  angry:    { group: 'rana', indices: [6, 7, 8, 9] },   // 生气
-  surprised:{ group: 'rana', indices: [10] },            // 惊讶
-  thinking: { group: 'rana', indices: [11, 12, 13] },    // 思考
-  idle:     { group: 'idle', indices: [0] },            // 默认待机
-  shame:    { group: 'rana', indices: [14, 15] },       // 害羞
-  cry:      { group: 'rana', indices: [16, 17] },        // 哭泣
+const emotionMotionMap: Record<string, { groups: string[] }> = {
+  happy:    { groups: ['smile01', 'smile02', 'smile03', 'smile04'] },
+  sad:      { groups: ['sad01', 'sad02'] },
+  angry:    { groups: ['angry01', 'angry02', 'angry03', 'angry04'] },
+  surprised:{ groups: ['surprised01'] },
+  thinking: { groups: ['thinking01', 'thinking02', 'thinking03'] },
+  idle:     { groups: ['idle01'] },
+  shame:    { groups: ['shame01', 'shame02'] },
+  cry:      { groups: ['cry01', 'cry02'] },
 };
 ```
 
-- **动作组**：`rana` 表示模型内「rana」组；`idle` 表示待机组。
-- **索引列表**：播放该情绪时，会从对应 `indices` 中**随机选一个**索引，再调用 `model.motion(group, index)`。
-- 未在 map 中声明的情绪会回退到 **`idle`** 的配置（`emotionMotionMap.idle`）。
+- 播放时从对应 `groups` 中**随机选一个**组名，再调用 `model.motion(groupName, 0)`。
+- 未在 map 中声明的情绪会回退到 **`idle`**（`emotionMotionMap.idle`）。
 
 ---
 
@@ -57,11 +56,11 @@ const emotionExpressionMap: Record<string, string> = {
   idle:     'idle01',
   shame:    'shame01',
   cry:      'cry01',
-  neutral:  'normal',   // 中立，用于唇形测试等
+  neutral:  'default',  // 中立，用于唇形测试（新模型用 default）
 };
 ```
 
-- 当前存在开关 **`USE_NEUTRAL_EXPRESSION_FOR_TEST`**（默认 `true`）：为 `true` 时，**所有情绪**在播放动作时都会强制使用 **`normal`** 表情，便于观察嘴部开合；设为 `false` 则按上表按情绪切换表情。
+- 开关 **`USE_NEUTRAL_EXPRESSION_FOR_TEST`**（默认 `true`）：为 `true` 时播放动作强制使用 **`default`** 表情便于观察嘴部；设为 `false` 则按上表按情绪切换表情。
 
 ---
 
@@ -81,13 +80,11 @@ const emotionExpressionMap: Record<string, string> = {
 
 **数据流**：WebSocket 消息 `message.emotion` → `useWebSocket` 写入 `chatStore.messages` → `Live2DCanvas` 的 `useEffect` 读到最新消息 → `controller.playEmotion(emotion)`。
 
-### 4.2 画布点击（随机微笑动作）
+### 4.2 画布点击（随机动作）
 
 **位置**：`src/hooks/useLive2D.ts`，在 `initialize` 里对 canvas 绑定 `click` 事件。
 
-- 用户**点击 Live2D 画布**时执行：
-  - `model.motion('rana', Math.floor(Math.random() * 4))`
-- 即从 **rana 组索引 0、1、2、3** 中随机播一个（与 `happy` 使用的索引一致，可视为「微笑」类动作）。
+- 用户**点击 Live2D 画布**时，从 `CLICK_RANDOM_MOTIONS`（如 `smile01`、`smile02`、`thinking01`、`wink01`、`bye01` 等）中随机选一个组名，执行 `model.motion(groupName, 0)`。
 
 ### 4.3 空闲循环（定时待机动作）
 
@@ -95,8 +92,8 @@ const emotionExpressionMap: Record<string, string> = {
 
 - 模型加载约 **1 秒后**会调用 `startIdleAnimation()`。
 - 内部使用 `setInterval(..., 15000)`，每 **15 秒**执行一次：
-  - `model.motion('idle', Math.floor(Math.random() * 3))`
-- 即从 **idle 组的 0、1、2** 中随机播一个待机动作。
+  - `model.motion('idle01', 0)`
+- 即播放 **idle01** 待机动作（live2d 模型单组单动作）。
 - 若 `model.internalModel?.motionManager` 不可用会 catch 并只打 warning，不抛错。
 
 ---
@@ -107,19 +104,19 @@ const emotionExpressionMap: Record<string, string> = {
 
 | 方法 | 说明 |
 |------|------|
-| `playEmotion(emotion: string)` | 按情绪播放：从 `emotionMotionMap` 取组与索引列表，随机一个索引调用 `model.motion(group, index)`，再按 `emotionExpressionMap`（或测试开关）设置 `model.expression(...)` |
-| `playMotion(group: string, index: number)` | 直接播放指定动作组的指定索引：`model.motion(group, index)` |
+| `playEmotion(emotion: string)` | 按情绪播放：从 `emotionMotionMap` 取 `groups` 列表，随机一个组名调用 `model.motion(groupName, 0)`，再按 `emotionExpressionMap`（或测试开关）设置 `model.expression(...)` |
+| `playMotion(group: string, index: number)` | 直接播放指定动作组：`model.motion(group, index)`（新模型通常 index 为 0） |
 | `setExpression(expression: string)` | 仅设置表情：`model.expression(expression)` |
 | `setLipSync(value: number)` | 设置唇形同步嘴部开合（0–1），与动作切换独立，见 [Live2D-LipSync.md](./Live2D-LipSync.md) |
-| `startIdleAnimation()` | 开启 15 秒一次的空闲动作定时器 |
+| `startIdleAnimation()` | 开启 15 秒一次的空闲动作定时器（播放 `idle01`） |
 | `stopIdleAnimation()` | 清除空闲动作定时器（如卸载时） |
 
 ---
 
 ## 6. 底层调用关系小结
 
-- **动作**：统一通过 `model.motion(group, index)`，其中 `group` 为模型内动作组名（如 `rana`、`idle`），`index` 为该组内的动作索引。
-- **表情**：通过 `model.expression(expressionName)`，名称来自 `emotionExpressionMap` 或测试用的 `normal`。
+- **动作**：统一通过 `model.motion(groupName, index)`。live2d 模型下 `groupName` 为 model.json 中 `motions` 的 key（如 `smile01`、`idle01`），`index` 通常为 `0`。
+- **表情**：通过 `model.expression(expressionName)`，名称来自 `emotionExpressionMap` 或测试用的 `default`。
 - 动作与表情可同时生效：先 `motion` 再 `expression`，表情会叠加在动作之上（具体视觉效果取决于模型配置）。
 
 ---
@@ -138,10 +135,10 @@ const emotionExpressionMap: Record<string, string> = {
 
 ## 8. 小结表
 
-| 触发场景 | 动作组 | 索引选择 | 表情 |
-|----------|--------|----------|------|
-| 助手消息 + emotion | `emotionMotionMap[emotion].group` | 从 `indices` 随机 | 测试模式固定 `normal`，否则 `emotionExpressionMap[emotion]` |
-| 画布点击 | `rana` | 0～3 随机 | 不单独改 |
-| 空闲 15 秒 | `idle` | 0～2 随机 | 不单独改 |
+| 触发场景 | 动作组 | 索引 | 表情 |
+|----------|--------|------|------|
+| 助手消息 + emotion | 从 `emotionMotionMap[emotion].groups` 随机 | 0 | 测试模式固定 `default`，否则 `emotionExpressionMap[emotion]` |
+| 画布点击 | 从 `CLICK_RANDOM_MOTIONS` 随机（如 smile01、thinking01） | 0 | 不单独改 |
+| 空闲 15 秒 | `idle01` | 0 | 不单独改 |
 
-整体上，**动作切换模式**是「情绪驱动 + 点击互动 + 定时待机」的组合；情绪来源于**每条助手消息的 `emotion` 字段**，与后端/WebSocket 协议一致即可扩展新情绪或新动作索引。
+整体上，**动作切换模式**是「情绪驱动 + 点击互动 + 定时待机」的组合；情绪来源于**每条助手消息的 `emotion` 字段**，与后端/WebSocket 协议一致即可扩展新情绪或新动作组名。

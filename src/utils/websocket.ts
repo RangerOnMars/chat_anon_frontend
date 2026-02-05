@@ -205,6 +205,8 @@ export interface Character {
   display_name: string;
   description: string;
   voice_id: string;
+  /** Default Live2D model set under live2d/{name}/{live2d_model_set}/ (optional, from GET /characters). */
+  live2d_model_set?: string;
 }
 
 export interface CharactersResponse {

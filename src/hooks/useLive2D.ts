@@ -19,19 +19,19 @@ function patchPixiV7Interaction(obj: unknown): void {
   }
 }
 
-// Emotion to motion mapping based on the model's motion groups
-const emotionMotionMap: Record<string, { group: string; indices: number[] }> = {
-  happy: { group: 'rana', indices: [0, 1, 2, 3] }, // smile motions
-  sad: { group: 'rana', indices: [4, 5] }, // sad motions
-  angry: { group: 'rana', indices: [6, 7, 8, 9] }, // angry motions
-  surprised: { group: 'rana', indices: [10] }, // surprised
-  thinking: { group: 'rana', indices: [11, 12, 13] }, // thinking
-  idle: { group: 'idle', indices: [0] }, // default idle
-  shame: { group: 'rana', indices: [14, 15] }, // shame
-  cry: { group: 'rana', indices: [16, 17] }, // cry
+// Emotion to motion mapping for live2d model.json (motion groups by name; index 0 per group)
+const emotionMotionMap: Record<string, { groups: string[] }> = {
+  happy: { groups: ['smile01', 'smile02', 'smile03', 'smile04'] },
+  sad: { groups: ['sad01', 'sad02'] },
+  angry: { groups: ['angry01', 'angry02', 'angry03', 'angry04'] },
+  surprised: { groups: ['surprised01'] },
+  thinking: { groups: ['thinking01', 'thinking02', 'thinking03'] },
+  idle: { groups: ['idle01'] },
+  shame: { groups: ['shame01', 'shame02'] },
+  cry: { groups: ['cry01', 'cry02'] },
 };
 
-// Expression mapping
+// Expression mapping (live2d uses same names; neutral/default for lip-sync test)
 const emotionExpressionMap: Record<string, string> = {
   happy: 'smile01',
   sad: 'sad01',
@@ -41,8 +41,14 @@ const emotionExpressionMap: Record<string, string> = {
   idle: 'idle01',
   shame: 'shame01',
   cry: 'cry01',
-  neutral: 'normal', // 中立表情，用于唇形测试
+  neutral: 'default', // 中立表情，用于唇形测试（新模型无 normal，用 default）
 };
+
+/** Motion groups for canvas click: pick one at random. */
+const CLICK_RANDOM_MOTIONS = [
+  'smile01', 'smile02', 'smile03', 'smile04',
+  'thinking01', 'thinking02', 'wink01', 'bye01',
+];
 
 /** 测试时强制使用中立表情，便于观察嘴部开合；设为 false 可恢复按情绪切换表情 */
 const USE_NEUTRAL_EXPRESSION_FOR_TEST = true;
@@ -196,7 +202,8 @@ export function useLive2D(primaryPath: string, fallbackPath?: string | null) {
         model.focus(x, y);
       };
       const onCanvasClick = () => {
-        model.motion('rana', Math.floor(Math.random() * 4));
+        const group = CLICK_RANDOM_MOTIONS[Math.floor(Math.random() * CLICK_RANDOM_MOTIONS.length)];
+        model.motion(group, 0);
       };
       canvas.addEventListener('pointermove', onCanvasPointerMove);
       canvas.addEventListener('click', onCanvasClick);
@@ -210,7 +217,7 @@ export function useLive2D(primaryPath: string, fallbackPath?: string | null) {
       setLoadError(null);
 
       // 默认设为中立表情（便于唇形测试）
-      const defaultExpression = USE_NEUTRAL_EXPRESSION_FOR_TEST ? (emotionExpressionMap.neutral ?? 'normal') : emotionExpressionMap.idle;
+      const defaultExpression = USE_NEUTRAL_EXPRESSION_FOR_TEST ? (emotionExpressionMap.neutral ?? 'default') : emotionExpressionMap.idle;
       try {
         model.expression(defaultExpression);
       } catch (_) {
@@ -320,20 +327,18 @@ export function useLive2D(primaryPath: string, fallbackPath?: string | null) {
     }
   }, [primaryPath, fallbackPath]);
 
-  // Play emotion animation
+  // Play emotion animation (live2d: one motion per group name, index 0)
   const playEmotion = useCallback((emotion: string) => {
     const model = modelRef.current;
     if (!model) return;
 
     const mapping = emotionMotionMap[emotion] || emotionMotionMap.idle;
-    const randomIndex = mapping.indices[Math.floor(Math.random() * mapping.indices.length)];
+    const group = mapping.groups[Math.floor(Math.random() * mapping.groups.length)];
 
-    // Play motion
-    model.motion(mapping.group, randomIndex);
+    model.motion(group, 0);
 
-    // Set expression（测试时固定中立表情，便于观察嘴部）
     const expression = USE_NEUTRAL_EXPRESSION_FOR_TEST
-      ? (emotionExpressionMap.neutral ?? 'normal')
+      ? (emotionExpressionMap.neutral ?? 'default')
       : emotionExpressionMap[emotion];
     if (expression) {
       model.expression(expression);
@@ -421,7 +426,7 @@ export function useLive2D(primaryPath: string, fallbackPath?: string | null) {
     // #endregion
   }, []);
 
-  // Start idle animation loop
+  // Start idle animation loop (live2d: idle01 group, index 0)
   const startIdleAnimation = useCallback(() => {
     if (idleIntervalRef.current) return;
 
@@ -429,7 +434,7 @@ export function useLive2D(primaryPath: string, fallbackPath?: string | null) {
       const model = modelRef.current;
       if (model?.internalModel?.motionManager) {
         try {
-          model.motion('idle', Math.floor(Math.random() * 3));
+          model.motion('idle01', 0);
         } catch (error) {
           console.warn('Failed to play idle motion:', error);
         }

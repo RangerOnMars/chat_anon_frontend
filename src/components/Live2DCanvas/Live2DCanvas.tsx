@@ -4,19 +4,31 @@ import { useChatStore } from '@/stores/chatStore';
 import { cn } from '@/utils/cn';
 import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 
-/** Anon model path (README: public/live2d/anon/live2D_model/). */
-const ANON_MODEL_PATH = '/live2d/anon/live2D_model/3.model.json';
+/** Live2D base: public/live2d/{character}/{modelSet}/model.json; assets under each set's data/ folder. */
+const LIVE2D_BASE = '/live2d';
+
+/** Default model set per character when backend does not provide live2d_model_set. */
+const DEFAULT_MODEL_SET: Record<string, string> = {
+  anon: 'casual-2023',
+  mutsumi: 'school_summer-2023',
+};
+
+const ANON_FALLBACK_MODEL_SET = DEFAULT_MODEL_SET.anon;
 
 /** Resolve Live2D paths by character: primary path and optional fallback when primary is missing. */
-function getLive2DPaths(characterName: string | undefined): { primary: string; fallback: string | null } {
+function getLive2DPaths(
+  characterName: string | undefined,
+  live2dModelSet?: string | null
+): { primary: string; fallback: string | null } {
   const name = (characterName ?? 'anon').toLowerCase();
+  const modelSet =
+    live2dModelSet ?? DEFAULT_MODEL_SET[name] ?? ANON_FALLBACK_MODEL_SET;
+  const primary = `${LIVE2D_BASE}/${name}/${modelSet}/model.json`;
   if (name === 'anon') {
-    return { primary: ANON_MODEL_PATH, fallback: null };
+    return { primary, fallback: null };
   }
-  return {
-    primary: `/live2d/${name}/live2D_model/3.model.json`,
-    fallback: ANON_MODEL_PATH,
-  };
+  const fallback = `${LIVE2D_BASE}/anon/${ANON_FALLBACK_MODEL_SET}/model.json`;
+  return { primary, fallback };
 }
 
 /** Scale RMS to mouth opening; higher = wider mouth. Increased so movement is clearly visible. */
@@ -27,7 +39,8 @@ const LIP_SYNC_POWER = 0.6;
 export function Live2DCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const currentCharacter = useChatStore((state) => state.currentCharacter);
-  const { primary, fallback } = getLive2DPaths(currentCharacter?.name);
+  const live2dModelSet = currentCharacter?.live2d_model_set;
+  const { primary, fallback } = getLive2DPaths(currentCharacter?.name, live2dModelSet);
   const { initialize, isLoaded, loadError, controller } = useLive2D(primary, fallback);
   // Use selectors to avoid subscribing to entire store
   const messages = useChatStore((state) => state.messages);

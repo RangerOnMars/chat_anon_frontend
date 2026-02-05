@@ -32,36 +32,34 @@ npm install
 
 ### 2. 设置 Live2D 模型
 
-将 Live2D 模型文件复制到 `public/live2d/` 目录：
+将 Live2D 模型放在 `public/live2d/` 下，按**角色 + 模型套**组织；每套模型一个子目录，内含 `model.json` 和 `data/` 素材。
 
-```bash
-# Windows
-xcopy /E /I "D:\coding_ws\D_sakiko\live2d_related\anon\live2D_model" "public\live2d\anon\live2D_model"
+目录结构：
 
-# 或者创建符号链接 (需要管理员权限)
-mklink /D "public\live2d\anon\live2D_model" "D:\coding_ws\D_sakiko\live2d_related\anon\live2D_model"
-```
-
-目录结构应该是：
 ```
 public/
 └── live2d/
-    ├── anon/                  # anon 模型（默认）
-    │   └── live2D_model/
-    │       ├── 3.model.json
-    │       └── ...
-    └── mutsumi/               # 可选：mutsumi 模型
-        └── live2D_model/
-            ├── 3.model.json
-            └── ...
+    ├── anon/                      # 角色名
+    │   ├── casual-2023/            # 模型套（默认）
+    │   │   ├── model.json          # 入口
+    │   │   └── data/
+    │   │       ├── model.moc
+    │   │       ├── physics.json
+    │   │       ├── textures/
+    │   │       ├── motions/
+    │   │       └── expressions/
+    │   └── ...                    # 可放多套，如 other-2023
+    └── mutsumi/
+        ├── school_winter-2023/     # 默认模型套
+        │   ├── model.json
+        │   └── data/
+        │       └── ...
+        └── ...
 ```
 
-- **角色切换**：切换至 anon 时加载 `public/live2d/anon/live2D_model/3.model.json`；切换至 mutsumi 时尝试加载 `public/live2d/mutsumi/live2D_model/3.model.json`，若不存在则回退使用 anon 模型。
-- **临时使用 anon 作为 mutsumi**：可将 anon 的 `live2D_model` 拷贝一份到 `public/live2d/mutsumi/`，例如（Windows）：
-  ```bash
-  xcopy /E /I "public\live2d\anon\live2D_model" "public\live2d\mutsumi\live2D_model"
-  ```
-- **从旧目录迁移**：若此前已将 anon 模型放在 `public/live2d/live2D_model/`，请将整个目录移动或复制到 `public/live2d/anon/live2D_model/`，否则前端将 404。
+- **路径规则**：前端加载 `/live2d/{角色名}/{模型套名}/model.json`。`model.json` 内使用相对路径（如 `data/model.moc`），由加载器自动解析。
+- **角色默认模型套**：后端 `GET /characters` 可返回每角色的 `live2d_model_set`（如 anon → `casual-2023`，mutsumi → `school_summer-2023`）；未配置时前端使用内置默认映射。
+- **回退**：若某角色对应路径加载失败（例如 mutsumi 未放置），会回退到 anon 的默认模型套。
 
 ### 3. 启动开发服务器
 
@@ -134,7 +132,7 @@ npm run build
 ## 注意事项
 
 - 语音功能需要浏览器授予麦克风权限
-- Live2D 模型需要正确放置在 `public/live2d/` 目录
+- Live2D 模型需放在 `public/live2d/{角色}/{模型套}/`，详见上文目录结构
 - 确保后端服务正常运行
 - 推荐使用 Chrome 或 Edge 浏览器
 

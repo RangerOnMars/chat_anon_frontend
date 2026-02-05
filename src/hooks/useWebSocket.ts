@@ -60,16 +60,21 @@ export function useWebSocket() {
       const message: ServerMessage = JSON.parse(event.data);
       
       switch (message.type) {
-        case 'connected':
+        case 'connected': {
           setConnectionStatus('connected');
-          setCurrentCharacter({
-            name: message.character,
-            display_name: message.character_display_name,
-            description: '',
-            voice_id: '',
-          });
+          const characters = useChatStore.getState().characters;
+          const fromList = characters.find((c) => c.name === message.character);
+          setCurrentCharacter(
+            fromList ?? {
+              name: message.character,
+              display_name: message.character_display_name,
+              description: '',
+              voice_id: '',
+            }
+          );
           setErrorMessage(null);
           break;
+        }
 
         case 'disconnected':
           setConnectionStatus('disconnected');
@@ -154,15 +159,20 @@ export function useWebSocket() {
           setIsThinking(false);
           break;
 
-        case 'character_switched':
-          setCurrentCharacter({
-            name: message.character,
-            display_name: message.character_display_name,
-            description: '',
-            voice_id: '',
-          });
+        case 'character_switched': {
+          const characters = useChatStore.getState().characters;
+          const fromList = characters.find((c) => c.name === message.character);
+          setCurrentCharacter(
+            fromList ?? {
+              name: message.character,
+              display_name: message.character_display_name,
+              description: '',
+              voice_id: '',
+            }
+          );
           clearMessages();
           break;
+        }
 
         case 'history_cleared':
           clearMessages();
