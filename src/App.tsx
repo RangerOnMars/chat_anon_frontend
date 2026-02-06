@@ -44,22 +44,22 @@ function App() {
       {/* Header */}
       <Header />
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col lg:flex-row gap-4 p-4 overflow-hidden">
+      {/* Main Content: md (768px) for two-column so fullscreen->half stays side-by-side */}
+      <main className="flex-1 flex flex-col md:grid md:grid-cols-[3fr_2fr] gap-4 p-4 overflow-hidden min-h-0">
         {/* Left: Live2D Model */}
-        <div className="w-full lg:w-3/5 h-[40vh] lg:h-full flex flex-col gap-4">
+        <div className="w-full min-h-[200px] flex-1 md:flex-initial md:min-h-0 flex flex-col gap-4 min-w-0">
           <div className="flex-1 min-h-0">
             <Live2DCanvas />
           </div>
           
           {/* Status Indicator (Desktop) */}
-          <div className="hidden lg:block">
+          <div className="hidden md:block">
             <StatusIndicator />
           </div>
         </div>
 
         {/* Right: Chat Panel */}
-        <div className="w-full lg:w-2/5 flex-1 lg:h-full flex flex-col gap-4 min-h-0">
+        <div className="w-full flex-1 md:min-h-0 flex flex-col gap-4 min-h-0 min-w-0">
           <div className="flex-1 min-h-0">
             <ChatPanel />
           </div>
@@ -70,7 +70,7 @@ function App() {
           </div>
 
           {/* Status Indicator (Mobile) */}
-          <div className="lg:hidden">
+          <div className="md:hidden">
             <StatusIndicator />
           </div>
         </div>

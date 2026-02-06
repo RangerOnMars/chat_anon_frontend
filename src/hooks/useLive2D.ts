@@ -53,6 +53,36 @@ const CLICK_RANDOM_MOTIONS = [
 /** 测试时强制使用中立表情，便于观察嘴部开合；设为 false 可恢复按情绪切换表情 */
 const USE_NEUTRAL_EXPRESSION_FOR_TEST = true;
 
+/** Resize renderer and update model scale/position to fit container. Use contentRect w/h when provided (e.g. from ResizeObserver) so size matches layout. */
+function updateSize(
+  container: HTMLDivElement,
+  app: PIXI.Application,
+  model: Live2DModel,
+  rectW?: number,
+  rectH?: number
+): void {
+  const w = rectW ?? container.clientWidth;
+  const h = rectH ?? container.clientHeight;
+  if (w <= 0 || h <= 0) return;
+  const mw = Math.max(model.width, 1e-6);
+  const mh = Math.max(model.height, 1e-6);
+  app.renderer.resize(w, h);
+  const view = app.view as HTMLCanvasElement;
+  if (view) {
+    view.style.width = `${w}px`;
+    view.style.height = `${h}px`;
+    view.style.display = 'block';
+  }
+  const scaleX = w / mw;
+  const scaleY = h / mh;
+  const fitScale = Math.min(scaleX, scaleY);
+  let scale = fitScale * 0.85;
+  scale = Math.min(scale, fitScale);
+  model.scale.set(scale);
+  model.x = w / 2;
+  model.y = h / 2 + mh * scale * 0.1;
+}
+
 export interface Live2DController {
   playEmotion: (emotion: string) => void;
   playMotion: (group: string, index: number) => void;
@@ -79,11 +109,21 @@ export function useLive2D(primaryPath: string, fallbackPath?: string | null) {
   const primaryPathRef = useRef<string>(primaryPath);
   /** Base path of the currently loaded model (e.g. /live2d/anon/casual-2023); used in teardown to clear PIXI texture cache. */
   const modelBasePathRef = useRef<string>('');
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const windowResizeHandlerRef = useRef<(() => void) | null>(null);
 
   // Teardown: destroy model and app, remove canvas from container, clear refs and loading state (force full PIXI reload on model switch)
   const teardown = useCallback(() => {
     const modelBasePath = modelBasePathRef.current;
     console.log('[Live2D] teardown start, modelBasePath=', modelBasePath);
+    if (resizeObserverRef.current) {
+      resizeObserverRef.current.disconnect();
+      resizeObserverRef.current = null;
+    }
+    if (windowResizeHandlerRef.current) {
+      window.removeEventListener('resize', windowResizeHandlerRef.current);
+      windowResizeHandlerRef.current = null;
+    }
     if (idleIntervalRef.current) {
       clearInterval(idleIntervalRef.current);
       idleIntervalRef.current = null;
@@ -171,7 +211,8 @@ export function useLive2D(primaryPath: string, fallbackPath?: string | null) {
       const resolution = Math.min(window.devicePixelRatio || 1, 2);
       const appOptions = {
         view: document.createElement('canvas'),
-        resizeTo: container,
+        width: container.clientWidth || 1,
+        height: container.clientHeight || 1,
         backgroundAlpha: 0,
         antialias: false, // Disable to reduce GPU memory
         resolution,
@@ -213,15 +254,18 @@ export function useLive2D(primaryPath: string, fallbackPath?: string | null) {
       modelBasePathRef.current = primaryPath.replace(/\/model\.json$/i, '');
       console.log('[Live2D] model loaded, primaryPath=', primaryPath);
 
-      // Scale and position model
-      const scaleX = container.clientWidth / model.width;
-      const scaleY = container.clientHeight / model.height;
-      const scale = Math.min(scaleX, scaleY) * 0.85;
-      
-      model.scale.set(scale);
-      model.x = container.clientWidth / 2;
-      model.y = container.clientHeight / 2 + model.height * scale * 0.1;
       model.anchor.set(0.5, 0.5);
+      updateSize(container, app, model);
+
+      // After character switch the container may not be laid out yet; re-run updateSize after layout so scale is correct
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const c = containerRef.current;
+          const a = appRef.current;
+          const m = modelRef.current;
+          if (c && a && m) updateSize(c, a, m);
+        });
+      });
 
       // Add to stage
       app.stage.addChild(model);
@@ -355,6 +399,35 @@ export function useLive2D(primaryPath: string, fallbackPath?: string | null) {
       setTimeout(() => {
         startIdleAnimation();
       }, 1000);
+
+      // Observe container size; use contentRect so we apply the size that triggered the callback (avoids wrong scale e.g. Mutsumi during width drag)
+      const resizeObserver = new ResizeObserver((entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+        const rw = entry.contentRect.width;
+        const rh = entry.contentRect.height;
+        if (rw <= 0 || rh <= 0) return;
+        requestAnimationFrame(() => {
+          const app = appRef.current;
+          const model = modelRef.current;
+          if (app && model && entry.target instanceof HTMLDivElement) {
+            updateSize(entry.target, app, model, rw, rh);
+          }
+        });
+      });
+      resizeObserver.observe(container);
+      resizeObserverRef.current = resizeObserver;
+
+      const onWindowResize = () => {
+        const c = containerRef.current;
+        const app = appRef.current;
+        const model = modelRef.current;
+        if (c && app && model) {
+          requestAnimationFrame(() => updateSize(c, app, model));
+        }
+      };
+      window.addEventListener('resize', onWindowResize);
+      windowResizeHandlerRef.current = onWindowResize;
 
     } catch (error) {
       console.error('Failed to load Live2D model:', error);
@@ -492,30 +565,6 @@ export function useLive2D(primaryPath: string, fallbackPath?: string | null) {
       primaryPathRef.current = primaryPath;
     }
   }, [primaryPath, teardown]);
-
-  // Handle window resize
-  useEffect(() => {
-    const handleResize = () => {
-      const container = containerRef.current;
-      const app = appRef.current;
-      const model = modelRef.current;
-
-      if (container && app && model) {
-        app.renderer.resize(container.clientWidth, container.clientHeight);
-        
-        const scaleX = container.clientWidth / model.width;
-        const scaleY = container.clientHeight / model.height;
-        const scale = Math.min(scaleX, scaleY) * 0.85;
-        
-        model.scale.set(scale);
-        model.x = container.clientWidth / 2;
-        model.y = container.clientHeight / 2 + model.height * scale * 0.1;
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
   // When primary path changes (e.g. character switch), teardown first so the next initialize() can load the new model (otherwise initialize returns early when appRef.current exists).
   useEffect(() => {
