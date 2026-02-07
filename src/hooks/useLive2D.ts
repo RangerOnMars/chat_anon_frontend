@@ -102,7 +102,11 @@ export function useLive2D(primaryPath: string, fallbackPath?: string | null) {
   const lipSyncValueRef = useRef<number>(0);
   /** Cached mouth param index and API so we apply in ticker without re-resolving. */
   const mouthParamIndexRef = useRef<number>(-1);
+  /** Resolved param ID string for Cubism 2; some .moc use ID for setParamFloat. */
+  const mouthParamNameRef = useRef<string>('');
   const mouthUseCub2Ref = useRef<boolean>(false);
+  /** Optional mouth form/scale param ids (Cubism 2 string or index) for models that need them to show opening. */
+  const mouthFormScaleRef = useRef<{ formId?: string | number; scaleId?: string | number } | null>(null);
   const lipSyncParamNotFoundLogRef = useRef<number>(0);
   const [isLoaded, setIsLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -186,6 +190,8 @@ export function useLive2D(primaryPath: string, fallbackPath?: string | null) {
       appRef.current = null;
     }
     mouthParamIndexRef.current = -1;
+    mouthParamNameRef.current = '';
+    mouthFormScaleRef.current = null;
     modelBasePathRef.current = '';
     setIsLoaded(false);
     setLoadError(null);
@@ -312,31 +318,56 @@ export function useLive2D(primaryPath: string, fallbackPath?: string | null) {
         } | undefined;
         if (!coreModel) return;
         const paramNames = ['PARAM_MOUTH_OPEN_Y', 'ParamMouthOpenY', 'Mouth_Open'];
+        let resolvedName = '';
         for (const paramName of paramNames) {
           try {
             const idx4 = coreModel.getParameterIndex?.(paramName) ?? -1;
             if (idx4 >= 0) {
               mouthParamIndexRef.current = idx4;
+              mouthParamNameRef.current = paramName;
               mouthUseCub2Ref.current = false;
+              resolvedName = paramName;
               console.debug('[Live2D] Lip sync param resolved (Cubism 4):', paramName);
-              return;
+              break;
             }
           } catch {
             //
           }
         }
-        for (const paramName of paramNames) {
-          try {
-            const idx2 = coreModel.getParamIndex?.(paramName) ?? -1;
-            if (idx2 >= 0) {
-              mouthParamIndexRef.current = idx2;
-              mouthUseCub2Ref.current = true;
-              console.debug('[Live2D] Lip sync param resolved (Cubism 2):', paramName);
-              return;
+        if (!resolvedName) {
+          for (const paramName of paramNames) {
+            try {
+              const idx2 = coreModel.getParamIndex?.(paramName) ?? -1;
+              if (idx2 >= 0) {
+                mouthParamIndexRef.current = idx2;
+                mouthParamNameRef.current = paramName;
+                mouthUseCub2Ref.current = true;
+                resolvedName = paramName;
+                console.debug('[Live2D] Lip sync param resolved (Cubism 2):', paramName);
+                break;
+              }
+            } catch {
+              //
             }
-          } catch {
-            //
           }
+        }
+        if (mouthUseCub2Ref.current) {
+          const formNames = ['PARAM_MOUTH_FORM_01', 'ParamMouthForm', 'Mouth_Form'];
+          const scaleNames = ['PARAM_MOUTH_SCALE', 'ParamMouthScale'];
+          let formId: string | number | null = null;
+          let scaleId: string | number | null = null;
+          for (const n of formNames) {
+            const idx = (coreModel as { getParamIndex?: (name: string) => number }).getParamIndex?.(n) ?? -1;
+            if (idx >= 0) { formId = n; break; }
+          }
+          for (const n of scaleNames) {
+            const idx = (coreModel as { getParamIndex?: (name: string) => number }).getParamIndex?.(n) ?? -1;
+            if (idx >= 0) { scaleId = n; break; }
+          }
+          const fs: { formId?: string | number; scaleId?: string | number } = {};
+          if (formId !== null) fs.formId = formId;
+          if (scaleId !== null) fs.scaleId = scaleId;
+          if (fs.formId !== undefined || fs.scaleId !== undefined) mouthFormScaleRef.current = fs;
         }
       };
 
@@ -352,7 +383,16 @@ export function useLive2D(primaryPath: string, fallbackPath?: string | null) {
           setParamFloat?: (id: string | number, v: number, w?: number) => void;
         };
         if (mouthUseCub2Ref.current) {
-          core.setParamFloat?.(mouthParamIndexRef.current, val);
+          const basePath = modelBasePathRef.current;
+          const id = basePath.includes('mutsumi') ? mouthParamIndexRef.current : (mouthParamNameRef.current || mouthParamIndexRef.current);
+          const isMutsumi = basePath.includes('mutsumi');
+          const effectiveVal = isMutsumi ? Math.min(1, val * 2) : val;
+          core.setParamFloat?.(id, effectiveVal, 1);
+          const fs = mouthFormScaleRef.current;
+          if (fs) {
+            if (fs.formId !== undefined) core.setParamFloat?.(fs.formId, 0, 1);
+            if (fs.scaleId !== undefined) core.setParamFloat?.(fs.scaleId, 1, 1);
+          }
         } else {
           core.setParameterValueByIndex?.(mouthParamIndexRef.current, val, 1);
         }
@@ -375,6 +415,7 @@ export function useLive2D(primaryPath: string, fallbackPath?: string | null) {
       modelExt._lipSyncOrigUpdate = origUpdate;
       modelExt._lipSyncInternalModel = internalModel;
 
+      tryResolveMouthParam();
       // Optional runtime logging: physics outputs and breathParamIndex (to confirm if mouth is driven by physics/breath)
       const im = internalModel as Record<string, unknown>;
       console.debug('[Live2D] lip sync debug', {
@@ -492,6 +533,7 @@ export function useLive2D(primaryPath: string, fallbackPath?: string | null) {
           const idx4 = core.getParameterIndex?.(paramName) ?? -1;
           if (idx4 >= 0) {
             mouthParamIndexRef.current = idx4;
+            mouthParamNameRef.current = paramName;
             mouthUseCub2Ref.current = false;
             break;
           }
@@ -505,6 +547,7 @@ export function useLive2D(primaryPath: string, fallbackPath?: string | null) {
             const idx2 = core.getParamIndex?.(paramName) ?? -1;
             if (idx2 >= 0) {
               mouthParamIndexRef.current = idx2;
+              mouthParamNameRef.current = paramName;
               mouthUseCub2Ref.current = true;
               break;
             }
@@ -518,7 +561,9 @@ export function useLive2D(primaryPath: string, fallbackPath?: string | null) {
     // Apply immediately so mouth updates even if PIXI ticker runs before our rAF next frame
     if (mouthParamIndexRef.current >= 0) {
       if (mouthUseCub2Ref.current) {
-        core.setParamFloat?.(mouthParamIndexRef.current, smoothed);
+        const id = modelBasePathRef.current.includes('mutsumi') ? mouthParamIndexRef.current : (mouthParamNameRef.current || mouthParamIndexRef.current);
+        const v = modelBasePathRef.current.includes('mutsumi') ? Math.min(1, smoothed * 2) : smoothed;
+        core.setParamFloat?.(id, v, 1);
       } else {
         core.setParameterValueByIndex?.(mouthParamIndexRef.current, smoothed, 1);
       }
