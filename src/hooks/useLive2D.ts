@@ -53,6 +53,12 @@ const CLICK_RANDOM_MOTIONS = [
 /** 测试时强制使用中立表情，便于观察嘴部开合；设为 false 可恢复按情绪切换表情 */
 const USE_NEUTRAL_EXPRESSION_FOR_TEST = true;
 
+/** Model scale as fraction of fit scale (1 = fill container); higher = larger character in the same canvas. */
+const MODEL_FIT_RATIO = 0.9;
+
+/** Vertical offset as fraction of scaled model height; 0 = center, negative = up, positive = down. */
+const MODEL_VERTICAL_OFFSET = 0;
+
 /** Resize renderer and update model scale/position to fit container. Use contentRect w/h when provided (e.g. from ResizeObserver) so size matches layout. */
 function updateSize(
   container: HTMLDivElement,
@@ -76,11 +82,11 @@ function updateSize(
   const scaleX = w / mw;
   const scaleY = h / mh;
   const fitScale = Math.min(scaleX, scaleY);
-  let scale = fitScale * 0.85;
+  let scale = fitScale * MODEL_FIT_RATIO;
   scale = Math.min(scale, fitScale);
   model.scale.set(scale);
   model.x = w / 2;
-  model.y = h / 2 + mh * scale * 0.1;
+  model.y = h / 2 + mh * scale * MODEL_VERTICAL_OFFSET;
 }
 
 export interface Live2DController {
